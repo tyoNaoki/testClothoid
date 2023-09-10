@@ -96,6 +96,12 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Meta = (ClampMin = 0, ClampMax = 89))
 		float turningPerformance = 80;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Meta = (ClampMin = 0, ClampMax = 250))
+		float scale_calcTurnRadius = 250;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+		float currentAngle = 0;
+
 protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
@@ -175,7 +181,7 @@ public:
 	FVector getAngleLocationFromThreepoint(float thetaMax,FVector p1,FVector p2,FVector p3,float radius);
 
 	UFUNCTION(BlueprintCallable, Category = CalcClothoidSpline)
-		TArray<FVector>calcClothoidSpline(UPARAM(ref) TArray<FClothoidPath>& pathDatas,float radius);
+		TArray<FVector>calcClothoidSpline(UPARAM(ref) TArray<FClothoidPath>& pathDatas);
 
 	//UFUNCTION(BlueprintCallable,Category = CalcClothoidSplineResultsSecond)
 	//	TArray<FVector>CalcClothoidSplineResultsSecond(UPARAM(ref) TArray<FVector>& pathDatas);
@@ -190,5 +196,7 @@ public:
 
 	void phiSimpson_integral(FPhiSlope f, float a, float b, std::complex<float>* r);
 
+	
 private:
+
 };
