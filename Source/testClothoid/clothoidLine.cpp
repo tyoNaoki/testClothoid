@@ -561,7 +561,7 @@ float AclothoidLine::angleOf2DVector(FVector2D p1, FVector2D p2)
 }
 
 
-TArray<FVector> AclothoidLine::calcClothoidSpline(UPARAM(ref) TArray<FClothoidPath>& pathDatas, float radius = 0){
+TArray<FVector> AclothoidLine::calcClothoidSpline(UPARAM(ref) TArray<FClothoidPath>& pathDatas){
 	TArray<FVector>results;
 
 	if (pathDatas.Num() <= 1) {
@@ -595,8 +595,8 @@ TArray<FVector> AclothoidLine::calcClothoidSpline(UPARAM(ref) TArray<FClothoidPa
 	for(; current < splineCount;){
 		
 		//制御点間の初期角度設定
-		float _phi0Value = pathDatas[current].phi0;
-		float _phi1Value = pathDatas[current].phi1;
+		//float _phi0Value = pathDatas[current].phi0;
+		//float _phi1Value = pathDatas[current].phi1;
 		
 		//次の制御点の座標設定
 		targetLoc = pathDatas[target].p_controll_Loc;
@@ -610,16 +610,16 @@ TArray<FVector> AclothoidLine::calcClothoidSpline(UPARAM(ref) TArray<FClothoidPa
 		float stepS = 1.0f / num;
 
 		//旋回角度
-		float turnnningAngle = 0;
+		//float turnnningAngle = 0;
 		
 		//曲率によるクロソイド制御するための制御点座標
 		FVector controll_p_Location;
-		FVector2D controllP;
+		FVector2D controll_p_XY;
 		//旋回半径
-		float r = calcTurnRadius(speed, turningPerformance, 250);
+		float radius = calcTurnRadius(speed, turningPerformance, scale_calcTurnRadius);
 
 		//円弧上の接線角度
-		float _tangetAngleOnCircle;
+		float _tangentAngleOnCircle;
 
 		//次のパスがある場合
 		if(pathDatas.IsValidIndex(next)){
@@ -643,7 +643,9 @@ TArray<FVector> AclothoidLine::calcClothoidSpline(UPARAM(ref) TArray<FClothoidPa
 			//旋回半径の円弧の始まりを制御点に設定する
 			controll_p_Location = getAngleLocation(angle_circle, radius, center);
 			//円弧上の接線の角度を取得する
-			_tangetAngleOnCircle = UKismetMathLibrary::ComposeRotators(UKismetMathLibrary::FindLookAtRotation(center, controll_p_Location), FRotator(0, signVal * 90, 0)).Yaw;
+			_tangentAngleOnCircle = UKismetMathLibrary::ComposeRotators(UKismetMathLibrary::FindLookAtRotation(center, controll_p_Location), FRotator(0, signVal * 90, 0)).Yaw;
+			
+
 
 			//controll_p_Location = getAngleLocationFromThreepoint(turn_rate,currentLoc,targetLoc,pathDatas[next].p_controll_Loc,radius);
 		}else{//次のパスがない場合
@@ -652,8 +654,13 @@ TArray<FVector> AclothoidLine::calcClothoidSpline(UPARAM(ref) TArray<FClothoidPa
 			
 			//円弧が無いので現在のパス座標から対象のパス座標への角度をそのまま制御点に設定する
 			FVector vec = targetLoc - currentLoc;
-			_tangetAngleOnCircle = convert_Angle_to_controllAngle(UKismetMathLibrary::DegAtan2(vec.Y,vec.X));
+			_tangentAngleOnCircle = UKismetMathLibrary::DegAtan2(vec.Y, vec.X);
 		}
+
+		FVector vec_tangent = controll_p_Location - currentLoc;
+		float _phi0Value = convert_Angle_to_controllAngle(UKismetMathLibrary::DegAtan2(vec_tangent.Y, vec_tangent.X));
+
+		float _phi1Value = convert_Angle_to_controllAngle(_tangentAngleOnCircle);
 
 		//現在地から次の点までの間に設定された曲率から初期曲率(phi0)と到達曲率(phi1)を設定
 		//FVector top = calcCurveHandle(currentLoc,pathDatas[target],radius);
@@ -670,8 +677,9 @@ TArray<FVector> AclothoidLine::calcClothoidSpline(UPARAM(ref) TArray<FClothoidPa
 
 		//float _fov = _phi1Value - _phi0Value;
 
+		controll_p_XY = FVector2D(controll_p_Location.X,controll_p_Location.Y);
 		//視野角計算
-		float _fov = angleOf2DVector(currentLocXY, targetLocXY) - _phi0Value;
+		float _fov = angleOf2DVector(currentLocXY, controll_p_XY) - _phi0Value;
 
 		//float _phi1Value = test_phiOneValue;
 		//float _phi1Value = UKismetMathLibrary::FindLookAtRotation(FVector(top.X, top.Y, 0), FVector/(targetLocXY.X, targetLocXY.Y, 0)).Yaw;
@@ -693,6 +701,9 @@ TArray<FVector> AclothoidLine::calcClothoidSpline(UPARAM(ref) TArray<FClothoidPa
 
 		//クロソイド曲線を生成
 		TArray<FVector2D>curve = calcClothoidCurve(num, _phi1Value, _phi0Value, _hValue,_fov);
+
+		//円弧の座標取得
+		FVector2D tangent_circle;
 
 		//仮の高さ設定
 		float currentZ = currentLoc.Z;
