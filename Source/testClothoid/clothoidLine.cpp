@@ -1,4 +1,6 @@
+
 // Fill out your copyright notice in the Description page of Project Settings.
+
 
 
 #include "clothoidLine.h"
@@ -230,6 +232,7 @@ float AclothoidLine::calcTurnRadius(float turn_speed, float turnningPerformance,
 	return result / scale;
 }
 
+/*
 float AclothoidLine::myNewton(float n, float _phi, float fov){
 	double val = 999;
 	int k = 0;
@@ -264,7 +267,6 @@ float AclothoidLine::myNewton(float n, float _phi, float fov){
 		k += 1;
 	}
 		
-
 	if (k >= countMax){
 		UE_LOG(LogTemp, Error, TEXT("Failed to converge!!"));
 	}
@@ -273,13 +275,14 @@ float AclothoidLine::myNewton(float n, float _phi, float fov){
 
 	return value;
 }
+*/
 
 float AclothoidLine::getPhi_newtonMethod(float n,float _phi,float fov){
 	float error = 0.01;
 	float delta = 0.001;
 	float x1 = 0;
 	int k = 0;
-	int countMax = 100;
+	int countMax = 30;
 
 	while (true) {
 		float x2 = x1 + delta;
@@ -303,6 +306,7 @@ float AclothoidLine::getPhi_newtonMethod(float n,float _phi,float fov){
 	return x1;
 }
 
+/*
 float AclothoidLine::falsePositionMethod(float n,float _phi,float fov){
 	float _phi_x_Value = 0;
 	//param
@@ -314,8 +318,6 @@ float AclothoidLine::falsePositionMethod(float n,float _phi,float fov){
 	//float x = 0;
 	int countMax = 10;
 	int k = 0;
-
-
 
 	while (err > 0.00000001 && k < countMax) {
 		_phi_x_Value = (a * fx(n,_phi, b, fov) - b * fx(n, _phi, a, fov)) / (fx(n, _phi, b, fov) - fx(n, _phi, a, fov));
@@ -336,9 +338,9 @@ float AclothoidLine::falsePositionMethod(float n,float _phi,float fov){
 	}
 	UE_LOG(LogTemp, Log, TEXT("(result : %f,n : %f,phi : %f,fov : %f),count %d"), _phi_x_Value, n,UKismetMathLibrary::RadiansToDegrees(_phi), fov, k);
 
-
-return _phi_x_Value;
+	return _phi_x_Value;
 }
+
 
 FVector AclothoidLine::calcCurveHandle(FVector p1, FVector p2, float radius){
 	float dis = FVector::Distance(p1,p2);
@@ -348,6 +350,7 @@ FVector AclothoidLine::calcCurveHandle(FVector p1, FVector p2, float radius){
 	FVector fv = UKismetMathLibrary::GetForwardVector(rot);
 	return p1 + (fv * (dis/(cosd*2.0f)));
 }
+*/
 
 float AclothoidLine::getThreePointAngle(FVector p1, FVector p2, FVector p3)
 {
@@ -371,6 +374,19 @@ float AclothoidLine::getMiddleAngle(float angle1, float angle2)
 	return UKismetMathLibrary::DegAtan2(y,x);
 }
 
+FVector AclothoidLine::calcStartLocationOnArc(FVector current,float arc_radius,FVector center,float sign)
+{
+	
+	FVector vec = center - current;
+	float rad = atan2(vec.Y,vec.X);
+	float dis = vec.Size();
+	float _theta = UKismetMathLibrary::Asin(arc_radius /dis)*sign + rad;
+	float _x = arc_radius * cos(_theta);
+	float _y = arc_radius * sin(_theta);
+
+	return FVector(_x + current.X,_y + current.Y,center.Z);
+}
+
 float AclothoidLine::convert_Angle_to_controllAngle(float angle)
 {
 	if(UKismetMathLibrary::InRange_FloatFloat(angle,-180,-90,true,true)){
@@ -383,6 +399,42 @@ float AclothoidLine::convert_Angle_to_controllAngle(float angle)
 		return 180 - angle;
 	}
 	return 0.0f;
+}
+
+
+float AclothoidLine::calculateArcLength(float radius, float startAngle, float endAngle)
+{
+	return radius* (UKismetMathLibrary::DegreesToRadians(endAngle) - UKismetMathLibrary::DegreesToRadians(startAngle));
+}
+
+TArray<FVector> AclothoidLine::calcCircleLocations(float startAngle, float endAngle,float radius,FVector curve_start,FVector curve_end)
+{
+	TArray<FVector>results;
+
+	float zDiff = curve_end.Z - curve_start.Z;
+	
+	float angleLength = angle_diff(UKismetMathLibrary::DegreesToRadians(endAngle), UKismetMathLibrary::DegreesToRadians(startAngle));
+	angleLength = UKismetMathLibrary::RadiansToDegrees(angleLength);
+	int num = UKismetMathLibrary::Abs(angleLength)* ((float)arc_accuracy / 100.0);
+	if(num < 1){
+		results.Add(curve_start);
+		return results;
+	}
+
+	float step = 1.0f / num;
+
+	FVector center = FVector::ZeroVector;
+	FVector startAngleLoc = getAngleLocation(startAngle, radius, center);
+	results.SetNum(num);
+	for(int i = 0;i<num;i++){
+		float s = i * step;
+		float arc_point_angle = UKismetMathLibrary::ComposeRotators(FRotator(0, startAngle, 0), FRotator(0, angleLength * s, 0)).Yaw;
+		FVector arcPoint = getAngleLocation(arc_point_angle,radius,center);
+		//results[i] = cur + FVector2D(cirLoc);
+		results[i] = FVector(curve_start.X + arcPoint.X - startAngleLoc.X, curve_start.Y + arcPoint.Y - startAngleLoc.Y, curve_start.Z + (zDiff * s));
+	}
+
+	return results;
 }
 
 FVector AclothoidLine::getAngleLocation(float angle, float radius, FVector centerLocation)
@@ -411,14 +463,15 @@ FVector AclothoidLine::getAngleLocationFromThreepoint(float thetaMax,FVector p1,
 	return getAngleLocation(angle_circle,radius,center);
 }
 
-TArray<FVector2D> AclothoidLine::calcClothoidCurve(int n,float phi1, float phi0,float straightDis,float fov){
+TArray<FVector> AclothoidLine::calcClothoidCurve(int n,float phi1, float phi0,float straightDis,float fov,FVector controllLoc,FVector curveStartLoc){
 	
-    float stepS = 1.0f / 50;
+	int num_CalcClothoid = 50;
+    float stepS = 1.0f / num_CalcClothoid;
 	float iota = straightDis;
     TArray<FVector2D> psiPoints;
     TArray<FVector2D> psiCalcuPoints;
 
-	TArray<FVector2D> cPoints;
+	TArray<FVector> results;
 
     FSlope slope;
     slope.phi0 = UKismetMathLibrary::DegreesToRadians(phi0);
@@ -509,8 +562,9 @@ TArray<FVector2D> AclothoidLine::calcClothoidCurve(int n,float phi1, float phi0,
     phiSlope.phiU = UKismetMathLibrary::DegreesToRadians(phi1 - phi0) - phiSlope.phiV;
 	phiSlope.phiU = _tempPhi - phiSlope.phiV;
 
+	psiPoints.SetNum(num_CalcClothoid);
     complex<float> psiP_Vector;
-    for (int i = 0; i < 50; ++i) {
+    for (int i = 0; i < num_CalcClothoid; ++i) {
         float S = stepS * i;
 
         complex<float> r;
@@ -519,7 +573,9 @@ TArray<FVector2D> AclothoidLine::calcClothoidCurve(int n,float phi1, float phi0,
 
         float l_x = psiP_Vector.real();
         float l_y = psiP_Vector.imag();
-        psiPoints.Add(1 * FVector2D(l_x, l_y));
+		
+		psiPoints[i] = (1 * FVector2D(l_x, l_y));
+        //psiPoints.Add(1 * FVector2D(l_x, l_y));
     }
 	
     double lamda = UKismetMathLibrary::Distance2D(psiPoints[psiPoints.Num() - 1],psiPoints[0]);
@@ -533,8 +589,11 @@ TArray<FVector2D> AclothoidLine::calcClothoidCurve(int n,float phi1, float phi0,
 
 	stepS = 1.0f / n;
 
+	float zDiff = curveStartLoc.Z - controllLoc.Z;
+
     //クロソイド補間
     complex<float> cP_Vector;
+	results.SetNum(n);
     for (int i = 0; i < n; ++i) {
         float S = stepS * i;
 
@@ -544,9 +603,11 @@ TArray<FVector2D> AclothoidLine::calcClothoidCurve(int n,float phi1, float phi0,
 
         float l_x = cP_Vector.real();
         float l_y = cP_Vector.imag();
-        cPoints.Add(h * FVector2D(l_x, l_y));
+        //cPoints.Add(h * FVector2D(l_x, l_y));
+		FVector2D clothoidCurve = (h * FVector2D(l_x, l_y));
+		results[i] = FVector(clothoidCurve.X + controllLoc.X,clothoidCurve.Y + controllLoc.Y,controllLoc.Z + zDiff * S);
     }
-	return cPoints;
+	return results;
 }
 
 float AclothoidLine::angleOf2DVector(FVector2D p1, FVector2D p2)
@@ -560,6 +621,13 @@ float AclothoidLine::angleOf2DVector(FVector2D p1, FVector2D p2)
 	return  radian * 180 / pi;
 }
 
+float AclothoidLine::calc_TurnRate(FVector target, FVector p1, FVector p2)
+{
+	float angle1 = UKismetMathLibrary::FindLookAtRotation(target, p1).Yaw;
+	float angle2 = UKismetMathLibrary::FindLookAtRotation(target, p2).Yaw;
+	float _angleDiff = angle_diff(UKismetMathLibrary::DegreesToRadians(angle1), UKismetMathLibrary::DegreesToRadians(angle2));
+	return UKismetMathLibrary::RadiansToDegrees(abs(_angleDiff));
+}
 
 TArray<FVector> AclothoidLine::calcClothoidSpline(UPARAM(ref) TArray<FClothoidPath>& pathDatas){
 	TArray<FVector>results;
@@ -597,70 +665,123 @@ TArray<FVector> AclothoidLine::calcClothoidSpline(UPARAM(ref) TArray<FClothoidPa
 		//制御点間の初期角度設定
 		//float _phi0Value = pathDatas[current].phi0;
 		//float _phi1Value = pathDatas[current].phi1;
+		float turn_rate_start = 0;
+		float turn_rate_end = 0;
 		
 		//次の制御点の座標設定
 		targetLoc = pathDatas[target].p_controll_Loc;
 		targetLocXY = FVector2D(targetLoc.X, targetLoc.Y);
-		
-		//距離取得
-		float _hValue = UKismetMathLibrary::Distance2D(targetLocXY, currentLocXY);
-
-		//クロソイド曲線のステップ変数(1で正規化)
-		int num = _hValue * ((float)accuracy / 100.0);
-		float stepS = 1.0f / num;
 
 		//旋回角度
-		//float turnnningAngle = 0;
+		float turnnningAngle = 0;
 		
-		//曲率によるクロソイド制御するための制御点座標
-		FVector controll_p_Location;
-		FVector2D controll_p_XY;
+		//クロソイドにつなげる円弧座標
+		FVector arc_start;
+		FVector2D arc_start_XY;
+		FVector arc_end;
+
 		//旋回半径
 		float radius = calcTurnRadius(speed, turningPerformance, scale_calcTurnRadius);
+		//始点角度
+		float startAngle = 0;
+		//終点角度
+		float endAngle = 0;
 
 		//円弧上の接線角度
-		float _tangentAngleOnCircle;
+		float _tangentAngleOnCircle = 0;
+
+		//float _phi0Value = pathDatas[current].phi0;
+		//float _phi1Value = pathDatas[current].phi1;
 
 		//次のパスがある場合
 		if(pathDatas.IsValidIndex(next)){
-
+			
+			float dis_To_p_controll = UKismetMathLibrary::Distance2D(targetLocXY, currentLocXY);
 			//旋回半径がパス間の距離の半分をこえた場合、パス間の距離の半分を旋回半径にする
-			if((_hValue/2)<=radius){
-				radius = _hValue / 2;
+			if((dis_To_p_controll / 2)<=radius){
+				radius = dis_To_p_controll / 2;
 			}
 			float r1 = UKismetMathLibrary::FindLookAtRotation(targetLoc, currentLoc).Yaw;
 			float r2 = UKismetMathLibrary::FindLookAtRotation(targetLoc, pathDatas[next].p_controll_Loc).Yaw;
 			FRotator angle_Middle = FRotator(0, getMiddleAngle(r1, r2), 0);
 
-			FRotator composeRot = UKismetMathLibrary::ComposeRotators(angle_Middle, FRotator(0, 180, 0));
+			FRotator arc_Rot = UKismetMathLibrary::ComposeRotators(angle_Middle, FRotator(0, 180, 0));
 			float angle_threePoint = getThreePointAngle(currentLoc, targetLoc, pathDatas[next].p_controll_Loc);
 			float signVal = UKismetMathLibrary::SignOfFloat(angle_threePoint);
-			FRotator deltaRot = FRotator(0, signVal * turn_rate, 0);
-
-			float angle_circle = UKismetMathLibrary::NormalizedDeltaRotator(composeRot, deltaRot).Yaw;
-			FVector center = targetLoc + UKismetMathLibrary::GetForwardVector(angle_Middle) * radius;
-
-			//旋回半径の円弧の始まりを制御点に設定する
-			controll_p_Location = getAngleLocation(angle_circle, radius, center);
-			//円弧上の接線の角度を取得する
-			_tangentAngleOnCircle = UKismetMathLibrary::ComposeRotators(UKismetMathLibrary::FindLookAtRotation(center, controll_p_Location), FRotator(0, signVal * 90, 0)).Yaw;
+			//turn_rateの大きさで始点角度が決まる。（turn_rate : 0<=X<=90) 
+			//ここのturn_rateは始点角度の変化量
+			//実装予定(turn_rateを始点角度変化量に変更、終点角度変化量変数を作成する必要アリ)
+			
+			//angle_Middle.Yaw - r1
+			
 			
 
+			//float angle_circle = UKismetMathLibrary::NormalizedDeltaRotator(composeRot, deltaRot).Yaw;
+			
+			turn_rate_start = calc_TurnRate(currentLoc,targetLoc,pathDatas[next].p_controll_Loc);
+			turn_rate_end = calc_TurnRate(pathDatas[next].p_controll_Loc, targetLoc, currentLoc);
+
+			FRotator startRot = FRotator(0, signVal * turn_rate_start, 0);
+			//終点角度計算は未実装
+			//FRotator endRot = FRotator(0, -1 * signVal * turn_rate, 0);
+			FRotator endRot = FRotator(0, -1 * signVal * turn_rate_end, 0);
+
+			startAngle = UKismetMathLibrary::NormalizedDeltaRotator(arc_Rot, startRot).Yaw;
+			endAngle = UKismetMathLibrary::NormalizedDeltaRotator(arc_Rot, endRot).Yaw;
+				
+			FVector center = targetLoc + UKismetMathLibrary::GetForwardVector(angle_Middle) * radius;
+
+			//旋回半径の円弧の始まり
+			arc_start = getAngleLocation(startAngle, radius, center);
+
+			FVector arcstart1 = calcStartLocationOnArc(currentLoc, radius, center, signVal); 
+			test_arcStartLoc = currentLoc;
+			float startAngle1 = UKismetMathLibrary::FindLookAtRotation(center, arcstart1).Yaw;
+
+			arc_end = getAngleLocation(endAngle, radius, center);
+
+			//高さ計算
+			float arcLen = calculateArcLength(radius, startAngle, endAngle);
+			float curveLen = dis_To_p_controll + arcLen;
+			float zDiff = targetLoc.Z - currentLoc.Z;
+			arc_start.Z = ((dis_To_p_controll / curveLen) * zDiff) + currentLoc.Z;
+			arc_end.Z = targetLoc.Z;
+
+			//円弧上の接線の角度を取得する
+			_tangentAngleOnCircle = UKismetMathLibrary::ComposeRotators(UKismetMathLibrary::FindLookAtRotation(center, arc_start), FRotator(0, signVal * 90, 0)).Yaw;
 
 			//controll_p_Location = getAngleLocationFromThreepoint(turn_rate,currentLoc,targetLoc,pathDatas[next].p_controll_Loc,radius);
 		}else{//次のパスがない場合
 			//対象のパス座標に制御点に設定する
-			controll_p_Location = targetLoc;
+			arc_start = targetLoc;
+			arc_end = targetLoc;
 			
 			//円弧が無いので現在のパス座標から対象のパス座標への角度をそのまま制御点に設定する
 			FVector vec = targetLoc - currentLoc;
 			_tangentAngleOnCircle = UKismetMathLibrary::DegAtan2(vec.Y, vec.X);
+			//始点角度、終点角度はそのまま0で設定
 		}
 
-		FVector vec_tangent = controll_p_Location - currentLoc;
-		float _phi0Value = convert_Angle_to_controllAngle(UKismetMathLibrary::DegAtan2(vec_tangent.Y, vec_tangent.X));
+		FVector vec_tangent = arc_start - currentLoc;
 
-		float _phi1Value = convert_Angle_to_controllAngle(_tangentAngleOnCircle);
+		arc_start_XY = FVector2D(arc_start.X, arc_start.Y);
+
+		//距離取得
+		//float _hValue = UKismetMathLibrary::Distance2D(targetLocXY, currentLocXY);
+		float _hValue = UKismetMathLibrary::Distance2D(arc_start_XY, currentLocXY);
+		int num = _hValue * ((float)accuracy / 100.0);
+		//int num = accuracy;
+		float stepS = 1.0f / num;
+
+		//_hValue = 
+
+		//このphi0は、前の制御点のphi1を考慮せず、計算している
+		//実装予定
+		//float _phi0Value = convert_Angle_to_controllAngle(UKismetMathLibrary::DegAtan2(vec_tangent.Y, vec_tangent.X));
+		float _phi0Value = UKismetMathLibrary::DegAtan2(vec_tangent.Y, vec_tangent.X);
+
+		//float _phi1Value = convert_Angle_to_controllAngle(_tangentAngleOnCircle);
+		float _phi1Value = _tangentAngleOnCircle;
 
 		//現在地から次の点までの間に設定された曲率から初期曲率(phi0)と到達曲率(phi1)を設定
 		//FVector top = calcCurveHandle(currentLoc,pathDatas[target],radius);
@@ -670,16 +791,17 @@ TArray<FVector> AclothoidLine::calcClothoidSpline(UPARAM(ref) TArray<FClothoidPa
 			_phi0Value = UKismetMathLibrary::FindLookAtRotation(FVector(currentLocXY.X, currentLocXY.Y, 0), /FVector(top.X, top.Y, 0)).Yaw;
 			_phi1Value = UKismetMathLibrary::FindLookAtRotation(FVector(top.X, top.Y, 0), FVecto(targetLocXY.X, //targetLocXY.Y, 0)).Yaw;
 		}
+		
 		*/
+
 		//float _phi0Value = UKismetMathLibrary::FindLookAtRotation(FVector(currentLocXY.X, currentLocXY.Y, 0), /FVector(top.X, top.Y, 0)).Yaw;
 
 		//float _phi0Value = test_phiZeroValue;
 
 		//float _fov = _phi1Value - _phi0Value;
-
-		controll_p_XY = FVector2D(controll_p_Location.X,controll_p_Location.Y);
 		//視野角計算
-		float _fov = angleOf2DVector(currentLocXY, controll_p_XY) - _phi0Value;
+		float _fov = angleOf2DVector(currentLocXY, arc_start_XY) - _phi0Value;
+		//float _fov = angleOf2DVector(currentLocXY, targetLocXY) - _phi0Value;
 
 		//float _phi1Value = test_phiOneValue;
 		//float _phi1Value = UKismetMathLibrary::FindLookAtRotation(FVector(top.X, top.Y, 0), FVector/(targetLocXY.X, targetLocXY.Y, 0)).Yaw;
@@ -698,22 +820,27 @@ TArray<FVector> AclothoidLine::calcClothoidSpline(UPARAM(ref) TArray<FClothoidPa
 
 		}
 		*/
+		//仮の高さ設定
+		//float currentZ = currentLoc.Z;
+		//float zDiff = targetLoc.Z - currentLoc.Z;
 
 		//クロソイド曲線を生成
-		TArray<FVector2D>curve = calcClothoidCurve(num, _phi1Value, _phi0Value, _hValue,_fov);
+		TArray<FVector>curve = calcClothoidCurve(num, _phi1Value, _phi0Value, _hValue,_fov,currentLoc, arc_start);
 
 		//円弧の座標取得
-		FVector2D tangent_circle;
-
-		//仮の高さ設定
-		float currentZ = currentLoc.Z;
-		float zDiff = targetLoc.Z - currentLoc.Z;
+		TArray<FVector>tangent_circles = calcCircleLocations(startAngle,endAngle,radius,curve.Last(),arc_end);
+		
+		//高さ計算未実装
+		/*
 		for (int k = 0; k < num; k++) {
 			results.Add(FVector(curve[k].X, curve[k].Y, 0) + FVector(currentLocXY.X, currentLocXY.Y, currentZ + zDiff * (stepS * k)));
 		}
+		*/
+		results+=curve;
+		results+=tangent_circles;
 
 		//結果の最終座標を次のクロソイド曲線計算のスタート地点に設定
-		currentLoc = results[results.Num() - 1];
+		currentLoc = results.Last();
 		currentLocXY = FVector2D(currentLoc.X, currentLoc.Y);
 
 		curve.Empty();

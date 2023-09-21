@@ -115,8 +115,15 @@ protected:
 	UPROPERTY(BlueprintReadWrite)
 		float test_phiOneValue;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Meta = (ClampMin = 1, ClampMax = 5))
+		int accuracy = 3;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Meta = (ClampMin = 1, ClampMax = 100))
-		int accuracy = 50;
+		int arc_accuracy = 50;
+
+	UPROPERTY(BlueprintReadOnly)
+		FVector test_arcStartLoc;
+
 
 	/*
 	UPROPERTY(BlueprintReadOnly)
@@ -162,19 +169,27 @@ public:
 	UFUNCTION(BlueprintCallable, Category = CalcClothoidSpline)
 		float get_clothoid_angle(float radius);
 
-	float myNewton(float n, float _phi, float fov);
+	//float myNewton(float n, float _phi, float fov);
 
 	float getPhi_newtonMethod(float n,float _phi,float fov);
 
-	float falsePositionMethod(float n, float _phi, float fov);
+	//float falsePositionMethod(float n, float _phi, float fov);
 
-	FVector calcCurveHandle(FVector p1,FVector p2,float radius);
+	//FVector calcCurveHandle(FVector p1,FVector p2,float radius);
 
 	float getThreePointAngle(FVector p1,FVector p2,FVector p3);
 
 	float getMiddleAngle(float angle1,float angle2);
 
+	//FVector calcStartLocationOnArc(FVector current,FVector next,float arc_radius,FVector center,float sign);
+
+	FVector calcStartLocationOnArc(FVector current,float arc_radius, FVector center, float sign);
+
 	float convert_Angle_to_controllAngle(float angle);
+
+	float calculateArcLength(float radius,float startAngle,float endAngle);
+
+	TArray<FVector>calcCircleLocations(float startAngle,float endAngle,float radius,FVector curve_start,FVector curve_end);
 
 	FVector getAngleLocation(float angle,float radius,FVector centerLocation);
 
@@ -187,9 +202,11 @@ public:
 	//	TArray<FVector>CalcClothoidSplineResultsSecond(UPARAM(ref) TArray<FVector>& pathDatas);
 
 	UFUNCTION(BlueprintCallable, Category = CalcClothoidCurve)
-		TArray<FVector2D>calcClothoidCurve(int n, float phi1,float phi0,float straightDis,float fov);
+		TArray<FVector>calcClothoidCurve(int n, float phi1,float phi0,float straightDis,float fov,FVector controllLoc,FVector curveStartLoc);
 
 	float angleOf2DVector(FVector2D p1,FVector2D p2);
+
+	float calc_TurnRate(FVector target,FVector p1,FVector p2);
 
 	//template <class T = FSlope, class Real = float, class R = float>
 	void simpson_integral(FSlope f, float a, float b, std::complex<float> *r);
