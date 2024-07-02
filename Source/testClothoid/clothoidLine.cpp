@@ -3,6 +3,8 @@
 
 
 
+
+
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "clothoidLine.h"
@@ -68,6 +70,7 @@ float AclothoidLine::calc_TurnRate_Newton(float _sign, FCircle &circle, FVector 
 		if((x2-x1) == 0.0f || (y2-y1)==0.0f){
 			return 0.0f;
 		}
+
 		float diff_x = (y2 - y1) / (x2 - x1);
 		float next_x = x1 - y1 / diff_x;
 
@@ -162,30 +165,118 @@ FRotator AclothoidLine::getRotFromCircleTangent(FVector center, FVector circleTa
 	return rot;
 }
 
-TArray<FVector> AclothoidLine::tripleClothoidCurve(const float phi1, const float phi0, FVector start, FVector goal)
+TArray<FVector> AclothoidLine::tripleClothoidCurve(FTriple_ClothoidParameter bp_Param,const float phi1, const float phi0, FVector start, FVector goal)
 {
 	TArray<FVector>clothoidCurve;
-	float h = 0.0;
-	FSlope slope;
-	float theta = UKismetMathLibrary::FindLookAtRotation(start,goal).Yaw;
+	int n = 50;
+	float stepS = 0;
+	
+	float fov = UKismetMathLibrary::FindLookAtRotation(start,goal).Yaw;
 
-	float r = FVector::Dist(start,goal);
+	float  h = 0;
+	float r = FVector::Dist2D(start, goal);
+	//FSlope slope;
 
-	if(!calcClothoidParameter(phi1,phi0,theta,r,h,slope)){
+	/*
+	if(!calcClothoidParameter(phi1,phi0,fov,r,h,slope)){
 		UE_LOG(LogTemp,Error,TEXT("calcClothoidParameter is failed!! [phi1 : %f,phi0 : %f,start : %s,goal : %s]"),phi1,phi0,*start.ToString(),*goal.ToString());
 		return clothoidCurve;
 	}
-
-	UE_LOG(LogTemp, Error, TEXT("clothoidParam : [h : %f,phi1 : %f,phi0 : %f,phiV : %f,phiU : %f]"),h,UKismetMathLibrary::DegreesToRadians(phi1),UKismetMathLibrary::RadiansToDegrees(slope.phi0), UKismetMathLibrary::RadiansToDegrees(slope.phiV), UKismetMathLibrary::RadiansToDegrees(slope.phiU));
-
-	if(h<=0.0f){
+	*/
+	if (bp_Param.h < 100.0f || 0 > bp_Param.s1 || bp_Param.s1 >=bp_Param.s2 ||bp_Param.s2 >=1 ) {
 		//UE_LOG(LogTemp, Error, TEXT("calcClothoidParameter is failed!! [phi1 : %f,phi0 : %f,start : %s,goal : %s,h : %f]"), phi1, phi0, *start.ToString(), *goal.ToString(),h);
+
+		UE_LOG(LogTemp, Error, TEXT("h<=100.0f!! bp_Param.h = %f, s1 = %f, s2 = %f "),bp_Param.h,bp_Param.s1,bp_Param.s2);
 		return clothoidCurve;
 	}
 
+	h = 100;
+	
+	float s1 = bp_Param.s1;
+	float s2 = bp_Param.s2;
+	float a12 = bp_Param.a12;
+	float a22 = bp_Param.a22;
+	float a32 = bp_Param.a32;
+	float startAngle = bp_Param.startAngle;
+	float lastAngle = bp_Param.lastAngle;
+	float curveture0 = bp_Param.curveture0;
+	float curveture1 = bp_Param.curveture1;
+
+	FTriple_ClothoidParameter param;
+	if(!calcTripleCLothoidParameter(param,fov,startAngle,lastAngle,a12,a22,a32,curveture0,curveture1,h,s1,s2)){
+		return clothoidCurve;
+	}
+
+	if(h<=0.0f){
+		return clothoidCurve;
+	}
+
+	///////////tripleClothoidCurve///////////
+	int num = (int)param.h;
+	clothoidCurve.SetNum(num);
+	stepS = 1.0f/h;
+	int num0 = s1 * num;
+	int num1 = ((s2-s1)*num) + num0;
+
+	complex<float> curve;
+	int i = 0;
+
+	FVector lastpoint;
+
+	for (i = 0; i < num0; ++i) {
+
+		float S = stepS * i;
+
+		complex<float> p;
+		simpson_integral_phi1(param, S, S + stepS, &p);
+		curve += p;
+
+		float x = static_cast<float>(curve.real());
+		float y = static_cast<float>(curve.imag());
+
+		FVector2D clothoidCurve2D = (h * FVector2D(x, y));
+		clothoidCurve[i] = start + FVector(clothoidCurve2D, 0);
+	}
+	lastpoint = clothoidCurve[num0-1];
+
+	for (i = num0; i < num1; ++i) {
+
+		float S = stepS * i;
+
+		complex<float> p;
+		simpson_integral_phi2(param, S, S + stepS, &p);
+		curve += p;
+
+		float x = static_cast<float>(curve.real());
+		float y = static_cast<float>(curve.imag());
+
+		FVector2D clothoidCurve2D = (h * FVector2D(x, y));
+		clothoidCurve[i] = start + FVector(clothoidCurve2D, 0);
+	}
+
+	lastpoint = clothoidCurve[num1-1];
+
+	for(i = num1;i< num;++i){
+
+		float S = stepS * i;
+
+		complex<float> p;
+		simpson_integral_phi3(param, S, S + stepS, &p);
+		curve += p;
+
+		float x = static_cast<float>(curve.real());
+		float y = static_cast<float>(curve.imag());
+
+		FVector2D clothoidCurve2D = (h * FVector2D(x, y));
+		clothoidCurve[i] = start + FVector(clothoidCurve2D, 0);
+	}
+
+	////////////
+
+	/*
 	int num = (int)h;
 	clothoidCurve.SetNum(num);
-	float stepS = 1.0f / h;
+	stepS = 1.0f / h;
 	complex<float> curve;
 
 	for (int i = 0; i < num; ++i) {
@@ -202,6 +293,62 @@ TArray<FVector> AclothoidLine::tripleClothoidCurve(const float phi1, const float
 		FVector2D clothoidCurve2D = (h * FVector2D(x, y));
 		clothoidCurve[i] = start + FVector(clothoidCurve2D, 0);
 	}
+	*/
+	return clothoidCurve;
+}
+
+TArray<FVector> AclothoidLine::multipleClothoidCurve(FDouble_ClothoidParameter bp_Param, FVector start, FVector goal)
+{
+	//二連クロソイド曲線
+	TArray<FVector>clothoidCurve;
+
+	float fov = UKismetMathLibrary::FindLookAtRotation(start,goal).Yaw;
+	float pointDistance = FVector::Dist2D(start,goal);
+
+	auto param = bp_Param;
+
+	if(!calcClothoidParameterVer2(param,fov,pointDistance)){
+		return clothoidCurve;
+	}
+
+	//UE_LOG(LogTemp,Log,TEXT("result :h = %f phi0 = %f,phiV = %f,phiU = %f,K0 = %f,K1 = %f"),h,UKismetMathLibrary::RadiansToDegrees(slope.phi0),UKismetMathLibrary::RadiansToDegrees(slope.phiV),UKismetMathLibrary::RadiansToDegrees(slope.phiU),k0,k1);
+
+	int n2 = (int)param.h;
+	clothoidCurve.SetNum(n2);
+	float stepS = 1.0f / n2;
+	complex<float> curve;
+
+	int n1 = param.s1*param.h;
+
+	for (int i = 0; i < n1; ++i) {
+
+		float S = stepS * i;
+
+		complex<float> p;
+		param.simpson_integral_phi1(S, S + stepS, &p);
+		curve += p;
+
+		float x = static_cast<float>(curve.real());
+		float y = static_cast<float>(curve.imag());
+
+		FVector2D clothoidCurve2D = (param.h * FVector2D(x, y));
+		clothoidCurve[i] = start + FVector(clothoidCurve2D, 0);
+	}
+
+	for (int i = n1; i < n2; ++i) {
+
+		float S = stepS * i;
+
+		complex<float> p;
+		param.simpson_integral_phi2(S, S + stepS, &p);
+		curve += p;
+
+		float x = static_cast<float>(curve.real());
+		float y = static_cast<float>(curve.imag());
+
+		FVector2D clothoidCurve2D = (param.h * FVector2D(x, y));
+		clothoidCurve[i] = start + FVector(clothoidCurve2D, 0);
+	}
 
 	return clothoidCurve;
 }
@@ -210,7 +357,7 @@ bool AclothoidLine::calcClothoidParameter(const float phi1,const float phi0,cons
 {
 	FSlope f;
 	//始点から対象の制御点に向かう方向に取ったローカル座標に変換するために角度をローカルに変更
-	const float localPhi0 = UKismetMathLibrary::DegreesToRadians((phi0-theta));
+	const float localPhi0 = UKismetMathLibrary::DegreesToRadians(phi0-theta);
 	//localPhi0 + phiV + phiU = phi1 - theta
 	const float localPhi1 = UKismetMathLibrary::DegreesToRadians(phi1-theta);
 
@@ -218,9 +365,29 @@ bool AclothoidLine::calcClothoidParameter(const float phi1,const float phi0,cons
 	//f.phiU = UKismetMathLibrary::DegreesToRadians(phiU);
 
 	//∫[1-0]sin(phi(s)dS) = 0
-	if(!newtonMethod(localPhi1, localPhi0, f.phiV, f.phiU,r)){
+	
+	/*
+	if(!newtonMethod(localPhi1, localPhi0, f.phiV, f.phiU,r,theta)){
 		return false;
 	}
+	*/
+
+	
+	if (!calcNonlinearEquation(localPhi1, localPhi0, f.phiV, f.phiU, r, theta)) {
+		return false;
+	}
+	
+	/*
+	float s1 = 0.25;
+	float s2 = 0.75;
+	FTriple_ClothoidParameter param(s1,s2);
+	param.a10 = localPhi0;
+
+	if(!calcNonlinearEquation_threeC(localPhi0,param.a11,param.a12,theta,r)){
+		return false;
+	};
+	*/
+
 
 	//h * ∫[1-0](cos(phi(s))dS) = r
 
@@ -228,7 +395,6 @@ bool AclothoidLine::calcClothoidParameter(const float phi1,const float phi0,cons
 	//f.phi0 = UKismetMathLibrary::DegreesToRadians(phi0);
 
 	UE_LOG(LogTemp,Error,TEXT("simpson is %f,phiV is %f,phiU is %f"), simpson_integral_cos(f, 0, 1),UKismetMathLibrary::RadiansToDegrees(f.phiV),UKismetMathLibrary::RadiansToDegrees(f.phiU));
-	
 	
 	float cosP = 0.0f;
 	float stepS = 1.0f / 50.0f;
@@ -253,6 +419,153 @@ bool AclothoidLine::calcClothoidParameter(const float phi1,const float phi0,cons
 	return true;
 }
 
+/*
+bool AclothoidLine::calcClothoidParameterVer2(const float phi0, const float phiV, const float fov,const float directLength,float& h, FSlope& slope)
+{
+	float stepS;
+	FSlope f;
+	f.phi0 = UKismetMathLibrary::DegreesToRadians(phi0);
+	f.phiV = phiV;
+
+	if (!calcNonlinearEquationVer2(f.phi0, f.phiV, f.phiU,fov)) {
+		return false;
+	}
+
+	stepS = 1.0f/50;
+	complex<double> psiP_Vector;
+	FPhiSlope phiSlope;
+	phiSlope.phiV = f.phiV;
+	phiSlope.phiU = f.phiU;
+
+	FVector2D lastPoint;
+	FVector2D startPoint;
+	for (int i = 0; i < 50; ++i) {
+		double S = stepS * i;
+
+		complex<double> r;
+		phiSimpson_integral(phiSlope, S, S + stepS, &r);
+		psiP_Vector += r;
+
+		float l_x = static_cast<float>(psiP_Vector.real());
+		float l_y = static_cast<float>(psiP_Vector.imag());
+
+		if(i == 0){
+			startPoint = (1 * FVector2D(l_x, l_y));
+		}
+		if(i == (50 - 1)){
+			lastPoint = (1 * FVector2D(l_x, l_y));;
+		}
+	}
+
+	float curveLength = (directLength / UKismetMathLibrary::Distance2D(lastPoint, startPoint));
+
+	if(curveLength <= 0){
+		return false;
+	}
+
+	slope = f;
+	h = curveLength;
+
+	return true;
+}
+*/
+
+bool AclothoidLine::calcClothoidParameterVer2(FDouble_ClothoidParameter& param, const float fov, const float pointDistance)
+{
+
+	if (!calcNonlinearEquationVer2(param, fov)) {
+		return false;
+	}
+
+	float stepS = 1.0f / 100;
+	complex<double> psiP_Vector;
+
+	FVector2D lastPoint;
+	FVector2D startPoint;
+
+	
+	int num1 = param.s1*100;
+	for (int i = 0; i < num1; ++i) {
+		double S = stepS * i;
+
+		complex<float> r;
+		param.simpson_integral_phi1(S, S + stepS, &r);
+		psiP_Vector += r;
+
+		float l_x = static_cast<float>(psiP_Vector.real());
+		float l_y = static_cast<float>(psiP_Vector.imag());
+
+		if (i == 0) {
+			startPoint = (1 * FVector2D(l_x, l_y));
+		}
+	}
+
+	for (int i = num1; i < 100; ++i) {
+		double S = stepS * i;
+
+		complex<float> r;
+		param.simpson_integral_phi2(S, S + stepS, &r);
+		psiP_Vector += r;
+
+		float l_x = static_cast<float>(psiP_Vector.real());
+		float l_y = static_cast<float>(psiP_Vector.imag());
+
+		if (i == (100 - 1)) {
+			lastPoint = (1 * FVector2D(l_x, l_y));;
+		}
+	}
+
+	float curveLength = (pointDistance / UKismetMathLibrary::Distance2D(lastPoint, startPoint));
+
+	if (curveLength <= 0) {
+		return false;
+	}
+
+	
+	param.h = curveLength;
+	param.a10 = param.phi0;
+	param.a11 = param.k0 * param.h;
+	param.a20 = param.a10 + param.a11 * param.s1 + param.a12 * pow(param.s1, 2);
+	param.a21 = param.a11 + 2 * param.a12 * param.s1;
+	param.a22 = (param.a10 + (param.k1*param.h) * (1 - param.s1) - param.phi1) / (pow((1 - param.s1), 2));
+	
+
+	/*
+	param.h = curveLength;
+	param.a10 = param.phi0;
+	param.a11 = param.k0 * param.h;
+	param.a20 = param.a10 + param.a11 * (1 - param.s1) + param.a12 * pow((1 - param.s1), 2);
+	param.a21 = param.a11 + 2 * param.a12 * (1 - param.s1);
+	param.a22 = (param.a10 + (param.k1 * param.h) * (1 - param.s1) - param.phi1) / (pow((1 - param.s1), 2));
+	*/
+
+	return true;
+}
+
+bool AclothoidLine::calcTripleCLothoidParameter(FTriple_ClothoidParameter &param,float fov, float startAngle, float lastAngle, float a12,float a22,float a32,float curveture0, float curveture1, float h,float s1, float s2)
+{
+	param.h = h;
+	param.s1 = s1;
+	param.s2 = s2;
+	param.a10 = UKismetMathLibrary::DegreesToRadians(startAngle);
+	param.a11 = UKismetMathLibrary::DegreesToRadians(curveture0)*h;
+	param.a12 = UKismetMathLibrary::DegreesToRadians(a12);
+	param.a20 = param.a10 + param.a11*s1 + param.a12*pow(s1,2);
+	param.a21 = param.a11+ 2 * a12 * s1;
+	param.a22 = UKismetMathLibrary::DegreesToRadians(a22);
+	param.a30 = param.a20 + param.a21*(s2 - s1) + param.a22 * pow((s2 - s1),2);
+	param.a31 = param.a21 + 2* param.a22 * (s2 -s1);
+	param.a32 = UKismetMathLibrary::DegreesToRadians(a32);
+
+	return true;
+}
+
+bool AclothoidLine::calcTripleClothoidCurvePoint(FTriple_ClothoidParameter &param)
+{
+	
+	return true;
+}
+
 float AclothoidLine::simpson_integral_cos(FSlope f, float a, float b)
 {
 	float mul = (b - a) * static_cast<float>(1.0 / 6.0);
@@ -263,6 +576,24 @@ float AclothoidLine::simpson_integral_sin(FSlope f,float a,float b)
 {
 	float mul = (b - a) * static_cast<float>(1.0 / 6.0);
 	return mul * (f.slope_f_Sin(a) + static_cast<float>(4.0) * f.slope_f_Sin((a + b) * static_cast<float>(0.5)) + f.slope_f_Sin(b));
+}
+
+void AclothoidLine::simpson_integral_phi1(FTriple_ClothoidParameter& param, float a, float b,std::complex<float>*r)
+{
+	float mul = (b - a) * static_cast<float>(1.0 / 6.0);
+	*r = mul * (param.slope_f_phi_1(a) + static_cast<float>(4.0) * param.slope_f_phi_1((a + b) * static_cast<float>(0.5)) + param.slope_f_phi_1(b));
+}
+
+void AclothoidLine::simpson_integral_phi2(FTriple_ClothoidParameter& param, float a, float b,std::complex<float>* r)
+{
+	float mul = (b - a) * static_cast<float>(1.0 / 6.0);
+	*r =  mul * (param.slope_f_phi_2(a) + static_cast<float>(4.0) * param.slope_f_phi_2((a + b) * static_cast<float>(0.5)) + param.slope_f_phi_2(b));
+}
+
+void AclothoidLine::simpson_integral_phi3(FTriple_ClothoidParameter& param, float a, float b,std::complex<float>* r)
+{
+	float mul = (b - a) * static_cast<float>(1.0 / 6.0);
+	*r =  mul * (param.slope_f_phi_3(a) + static_cast<float>(4.0) * param.slope_f_phi_3((a + b) * static_cast<float>(0.5)) + param.slope_f_phi_3(b));
 }
 
 /*
@@ -444,9 +775,10 @@ FVector AclothoidLine::calcMaxCircleAngle(FCircle& circle, FCircle& circle2)
 double AclothoidLine::fx(int n, float phi, double x,float fov)
 {
 	float stepS = 1.0f / n;
-	TArray<FVector2D> points;
+	FVector2D lastPoint;
+	FVector2D startPoint;
+
 	FPhiSlope pSlope;
-	
 	pSlope.phiV = UKismetMathLibrary::DegreesToRadians(x);
 	pSlope.phiU = phi - pSlope.phiV;
 
@@ -460,13 +792,90 @@ double AclothoidLine::fx(int n, float phi, double x,float fov)
 		phiSimpson_integral(pSlope, S, S + stepS, &r);
 		psiP_Vector += r;
 
-		float x = static_cast<float>(psiP_Vector.real());
-		float y = static_cast<float>(psiP_Vector.imag());
-		points.Add(1 * FVector2D(x, y));
+		//float x = static_cast<float>(psiP_Vector.real());
+		//float y = static_cast<float>(psiP_Vector.imag());
+		if(i == 0){
+			float x = static_cast<float>(psiP_Vector.real());
+			float y = static_cast<float>(psiP_Vector.imag());
+			startPoint = (1 * FVector2D(x, y));
+		}
+		if(i == n-1){
+			float x = static_cast<float>(psiP_Vector.real());
+			float y = static_cast<float>(psiP_Vector.imag());
+			lastPoint = (1 * FVector2D(x, y));
+		}
+	}
+
+
+
+	// 2点の座標からラジアンを求める
+	double radian = atan2(lastPoint.Y - startPoint.Y, lastPoint.X - startPoint.X);
+
+	//degree = UKismetMathLibrary::RadiansToDegrees(radian)
+	double diff = angle_diff(radian, UKismetMathLibrary::DegreesToRadians(fov));
+
+	return UKismetMathLibrary::RadiansToDegrees(diff);
+
+	//double degreeDiff = UKismetMathLibrary::RadiansToDegrees(diff);
+
+	//return degreeDiff;
+	//angleOf2DVector(points[0], points[points.Num() - 1])
+
+	// ラジアンから度を求める
+	//double degree = UKismetMathLibrary::RadiansToDegrees(radian);
+
+	//return degree - fov;
+	//return angleOf2DVector(points[0],points[points.Num() - 1]) - fov;
+}
+
+double AclothoidLine::fx_d(int n, FDouble_ClothoidParameter& param, float fov)
+{
+	float stepS = 1.0f / n;
+	FVector2D lastPoint;
+	FVector2D startPoint;
+
+	//与えられた視野角と一致するか計算
+
+	int num1 = param.s1*n;
+
+	complex<double> psiP_Vector;
+	int i = 0;
+	for (i = 0; i < num1; ++i) {
+		double S = stepS * i;
+
+		complex<float> r;
+		param.simpson_integral_phi1(S, S + stepS, &r);
+		psiP_Vector += r;
+
+		//float x = static_cast<float>(psiP_Vector.real());
+		//float y = static_cast<float>(psiP_Vector.imag());
+		if (i == 0) {
+			float x = static_cast<float>(psiP_Vector.real());
+			float y = static_cast<float>(psiP_Vector.imag());
+			startPoint = (1 * FVector2D(x, y));
+		}
+	}
+
+	int num2 = num1+1;
+	for(i = num2;i<n;i++){
+		double S = stepS * i;
+
+		complex<float> r;
+		param.simpson_integral_phi2(S, S + stepS, &r);
+		psiP_Vector += r;
+
+		//float x = static_cast<float>(psiP_Vector.real());
+		//float y = static_cast<float>(psiP_Vector.imag());
+
+		if (i == n - 1) {
+			float x = static_cast<float>(psiP_Vector.real());
+			float y = static_cast<float>(psiP_Vector.imag());
+			lastPoint = (1 * FVector2D(x, y));
+		}
 	}
 
 	// 2点の座標からラジアンを求める
-	double radian = atan2(points.Last().Y - points[0].Y, points.Last().X - points[0].X);
+	double radian = atan2(lastPoint.Y - startPoint.Y, lastPoint.X - startPoint.X);
 
 	//degree = UKismetMathLibrary::RadiansToDegrees(radian)
 	double diff = angle_diff(radian, UKismetMathLibrary::DegreesToRadians(fov));
@@ -557,7 +966,7 @@ float AclothoidLine::getPhi_newtonMethod(float n,float _phi,float fov){
 	while (true) {
 		float x2 = x1 + delta;
 		float y1 = fx(n,_phi,x1,fov);
-		UE_LOG(LogTemp, Verbose, TEXT("fx(%f,%f,%f,%f)"), n, _phi, x1, fov);
+		UE_LOG(LogTemp, VeryVerbose, TEXT("fx(%f,%f,%f,%f)"), n, _phi, x1, fov);
 		float y2 = fx(n, _phi,x2,fov);
 		if(abs(x2 - x1) == 0){
 			UE_LOG(Clothoid_Debug_LOG,Error,TEXT("[%d] x2-x1 = %f"),check_loopCount,x2-x1);
@@ -566,7 +975,7 @@ float AclothoidLine::getPhi_newtonMethod(float n,float _phi,float fov){
 
 		float diff_x = (y2 - y1) / (x2 - x1);
 		float next_x = x1 - y1 / diff_x;
-		UE_LOG(LogTemp, Verbose, TEXT("[%d] diff_x(%f) = (y2(%f) - y1(%f)) / (x2(%f) - x1(%f))"),k,diff_x,y2,y1,x2,x1);
+		UE_LOG(LogTemp, VeryVerbose, TEXT("[%d] diff_x(%f) = (y2(%f) - y1(%f)) / (x2(%f) - x1(%f))"),k,diff_x,y2,y1,x2,x1);
 		UE_LOG(LogTemp, Verbose, TEXT("[%d] next_x(%f) = x1(%f) - y1(%f) / diff_x(%f)"), k, next_x, x1, y1, diff_x);
 
 		if (std::fabs(y1 - 0) < error || k >= countMax) {
@@ -598,50 +1007,135 @@ float AclothoidLine::angle_Vector(float value,float r){
 	return UKismetMathLibrary::RadiansToDegrees(diff);
 }
 
+const float AclothoidLine::fxVer2(const FPhiSlope f, const float fov)
+{
+	float stepS = 1.0f / 50;
+	FVector2D lastPoint;
+	FVector2D startPoint;
+	FPhiSlope pSlope = f;
+
+	//与えられた視野角と一致するか計算
+
+	complex<double> psiP_Vector;
+	for (int i = 0; i < 50; ++i) {
+		double S = stepS * i;
+
+		complex<double> r;
+		phiSimpson_integral(pSlope, S, S + stepS, &r);
+		psiP_Vector += r;
+
+		//float x = static_cast<float>(psiP_Vector.real());
+		//float y = static_cast<float>(psiP_Vector.imag());
+		if (i == 0) {
+			float x = static_cast<float>(psiP_Vector.real());
+			float y = static_cast<float>(psiP_Vector.imag());
+			startPoint = (1 * FVector2D(x, y));
+		}
+		if (i == (50 - 1)) {
+			float x = static_cast<float>(psiP_Vector.real());
+			float y = static_cast<float>(psiP_Vector.imag());
+			lastPoint = (1 * FVector2D(x, y));
+		}
+	}
+
+	// 2点の座標からラジアンを求める
+	double radian = atan2(lastPoint.Y - startPoint.Y, lastPoint.X - startPoint.X);
+
+	//degree = UKismetMathLibrary::RadiansToDegrees(radian)
+	double diff = angle_diff(radian, UKismetMathLibrary::DegreesToRadians(fov));
+
+	return UKismetMathLibrary::RadiansToDegrees(diff);
+}
+
+const float AclothoidLine::fx_sin(FSlope &f){
+	float sinP = 0.0f;
+	float stepS = 1.0f / 50.0f;
+
+	for (int i = 0; i < 50; ++i) {
+		float S = stepS * i;
+
+		sinP += simpson_integral_sin(f, S, S + stepS);
+	}
+
+	return sinP;
+}
+
+const float AclothoidLine::fx_cos(const float phi0,const float phi,const float x){
+	float cosP = 0.0f;
+	float stepS = 1.0f / 50.0f;
+	FSlope f;
+	f.phi0 = phi0;
+	f.phiV = UKismetMathLibrary::DegreesToRadians(x);
+	f.phiU = phi - f.phiV;
+
+	for (int i = 0; i < 50; ++i) {
+		float S = stepS * i;
+
+		cosP += simpson_integral_cos(f, S, S + stepS);
+	}
+
+	return cosP;
+}
 
 
-bool AclothoidLine::newtonMethod(const float localPhi1, const float localPhi0, float& phiV, float& phiU,float r)
+bool AclothoidLine::newtonMethod(const float localPhi1, const float localPhi0, float& phiV, float& phiU,float r,float theta)
 {
 	float error = 0.01;
-	//float error = 0.001;
-	float delta = 0.001;
-	//float delta = 0.01;
+	//float error = 0.005;
+	float delta = 0.01;
+	//float delta = 0.0001;
+	//localPhi0<=-90 : x1 = 344
+	//90 > localPhi0 >-90 : x1 = 0
+	//localPhi0 >= 90 : x1 = -344
+
 	float x1 = 0;
 	int k = 0;
 	int countMax = 30;
 
 	FSlope f;
 	f.phi0 = localPhi0;
-	float tempPhi = angle_diff(localPhi1,localPhi0);
-	//float tempPhi = localPhi1-localPhi0;
+	//float tempPhi = angle_diff(localPhi1,localPhi0);
+	float tempPhi = localPhi1 - localPhi0;
+	UE_LOG(LogTemp, Verbose, TEXT("localPhi1 is %f degree, localPhi0 is %f degree"),UKismetMathLibrary::RadiansToDegrees(localPhi1), UKismetMathLibrary::RadiansToDegrees(localPhi0));
 	float fov = UKismetMathLibrary::RadiansToDegrees(tempPhi);
-	//fov = 100.0f;
+	UE_LOG(LogTemp,Verbose,TEXT("fov is %f"),fov);
+	//float fov = UKismetMathLibrary::RadiansToDegrees(theta - localPhi0);
+	//float fov = UKismetMathLibrary::RadiansToDegrees(theta - localPhi0);
 
 	while (true) {
-		float y1 = fx(r,tempPhi,x1,fov);
-		UE_LOG(LogTemp,Verbose,TEXT("fx(%f,%f,%f,%f)"),r,tempPhi,x1,fov);
+		f.phiV = UKismetMathLibrary::DegreesToRadians(x1);
+		f.phiU = tempPhi - f.phiV;
+		//float y1 = fx(r,tempPhi,x1,fov);
+		float y1 = fx_sin(f);
+		//float y1 = fx_sin(f.phi0, tempPhi, x1);
+		
+		//UE_LOG(LogTemp,Error,TEXT("[%d]fx_sin = %f,fx = %f"),k,fx_sin(f.phi0,tempPhi,x1),UKismetMathLibrary::DegreesToRadians(y1));
+		UE_LOG(LogTemp,VeryVerbose,TEXT("[%d]fx(%f,%f,%f,%f)"),k,r,tempPhi,x1,fov);
 
 		float x2 = x1 + delta;
-		float y2 = fx(r,tempPhi,x2,fov);
+		//float y2 = fx(r,tempPhi,x2,fov);
+		f.phiV = UKismetMathLibrary::DegreesToRadians(x2);
+		f.phiU = tempPhi - f.phiV;
+		float y2 = fx_sin(f);
 		if (abs(x2 - x1) == 0.0f || abs(y2 - y1) == 0.0f) {
 			UE_LOG(Clothoid_Debug_LOG, Error, TEXT("[%d] x2-x1 = %f, y2 - y1 = %f"), check_loopCount, x2 - x1, y2 - y1);
 			break;
 		}
 
-		if (std::fabs(y1) < error || k >= countMax) {
+		if (std::fabs(y1 - 0) < error || k >= countMax) {
 			break;
 		}
 
 		float diff_x = (y2 - y1) / (x2 - x1);
-		UE_LOG(LogTemp, Verbose, TEXT("[%d] diff_x(%f) = (y2(%f) - y1(%f)) / (x2(%f) - x1(%f))"), k, diff_x, y2, y1, x2, x1);
+		UE_LOG(LogTemp, VeryVerbose, TEXT("[%d] diff_x(%f) = (y2(%f) - y1(%f)) / (x2(%f) - x1(%f))"), k, diff_x, y2, y1, x2, x1);
 
 		//float diff_x = angle_diff(y2,y1) / angle_diff(x2,x1);
 
 		float next_x = x1 - y1 / diff_x;
+		x1 = next_x;
 
 		UE_LOG(LogTemp, Verbose, TEXT("[%d] next_x(%f) = x1(%f) - y1(%f) / diff_x(%f)"), k, next_x, x1, y1, diff_x);
 
-		x1 = next_x;
 
 		//UE_LOG(LogTemp, Log, TEXT("[%d] x1 = %f , y1 = %f"), k, UKismetMathLibrary::RadiansToDegrees(x1), y1);
 		k += 1;
@@ -715,6 +1209,227 @@ bool AclothoidLine::newtonMethod(const float localPhi1, const float localPhi0, f
 	phiV = UKismetMathLibrary::DegreesToRadians(x1);
 	//phiU = angle_diff2(tempPhi,x1);
 	phiU = tempPhi-phiV;
+
+	return true;
+}
+
+bool AclothoidLine::calcNonlinearEquation(const float localPhi1, const float localPhi0, float& phiV, float& phiU, float r, float theta)
+{
+	// Low, High 初期値設定
+	float low = -720;
+	float high = 720;
+	int maxCount = 50;
+	float eps = 0.0001;
+	int k = 0;
+	float phi = localPhi1-localPhi0;
+	float x = 0;
+
+	FSlope f;
+	f.phi0 = localPhi0;
+
+	// 打ち切り回数 or 打ち切り誤差になるまで LOOP
+	for (k = 1; k <= maxCount; k++) {
+		x = (low + high) / 2;
+		f.phiV = UKismetMathLibrary::DegreesToRadians(x);
+		f.phiU = phi - f.phiV;
+		if (fx_sin(f) > 0)
+			high = x;
+		else
+			low = x;
+		if (fx_sin(f) == 0 || fabs(high - low) / fabs(low) < eps) {
+			UE_LOG(LogTemp,Log,TEXT("[%d]high = %f,low = %f"),k,high,low);
+			break;
+		}
+	}
+
+	phiV = UKismetMathLibrary::DegreesToRadians(x);
+	phiU = phi - phiV;
+
+	// 収束しなかった場合
+	if (k > maxCount){
+		UE_LOG(LogTemp,Error,TEXT("calcNonlinearEquation is Failed"));
+		return true;
+	}
+
+	//phiV = UKismetMathLibrary::DegreesToRadians(x);
+	
+	
+	return true;
+}
+
+/*
+bool AclothoidLine::calcNonlinearEquationVer2(const float phi0, const float phiV, float& phiU, const float fov)
+{
+	// Low, High 初期値設定
+	float low = -620;
+	float high = 620;
+	int maxCount = 50;
+	float eps = 0.0001;
+	int k = 0;
+	float x = 0;
+
+	FPhiSlope f;
+	f.phiV = phiV;
+	float targetAngle = deltaFloat(fov, UKismetMathLibrary::RadiansToDegrees(phi0));
+
+	// 打ち切り回数 or 打ち切り誤差になるまで LOOP
+	for (k = 1; k <= maxCount; k++) {
+		x = (low + high) / 2;
+		f.phiU = UKismetMathLibrary::DegreesToRadians(x);
+		if (fxVer2(f,targetAngle) > 0)
+			high = x;
+		else
+			low = x;
+		if (fxVer2(f, targetAngle) == 0 || fabs(high - low) / fabs(low) < eps) {
+			UE_LOG(LogTemp, Log, TEXT("[%d]high = %f,low = %f"), k, high, low);
+			break;
+		}
+	}
+
+	phiU = UKismetMathLibrary::DegreesToRadians(x);
+
+	// 収束しなかった場合
+	if (k > maxCount) {
+		UE_LOG(LogTemp, Error, TEXT("calcNonlinearEquation is Failed"));
+		return true;
+	}
+
+	//phiV = UKismetMathLibrary::DegreesToRadians(x);
+
+
+	return true;
+}
+*/
+
+bool AclothoidLine::calcNonlinearEquationVer2(FDouble_ClothoidParameter& _param, const float fov)
+{
+	// Low, High 初期値設定
+	float low = -620;
+	float high = 620;
+	
+	int maxCount = 50;
+	float eps = 0.0001;
+	int k = 0;
+	float x = 0;
+	
+	auto param = _param;
+	//param.a10 = param.phi0 - fov;
+	param.a10 = param.phi0;
+	//ｈを１と仮定して計算
+	param.a11 = param.k0 * 1.0f;
+
+	//const float phi1 = param.phi1-fov;
+	const float phi1 = param.phi1;
+
+	//float targetAngle = deltaFloat(fov, UKismetMathLibrary::RadiansToDegrees(phi0));
+
+	//a10 = 初期角度指定
+	//a11 = 初期曲率指定(k0)
+	//a12 = 到達できる値をニュートン法で指定
+
+	//a20 = a10 + a11 * (1 - s1) + a12 * (1 - s1) ^ 2
+	//a21 = a11 + 2 * a12 * (1 - s1)
+	//a22 = (k1 - a21) / (2 - 2 * s1)
+
+
+	// 打ち切り回数 or 打ち切り誤差になるまで LOOP
+	if(param.k0 == 0.0f){
+		for (k = 1; k <= maxCount; k++) {
+			x = (low + high) / 2;
+			
+			param.a12 = UKismetMathLibrary::DegreesToRadians(x);
+			param.a20 = param.a10 + param.a11*param.s1 + param.a12*pow(param.s1,2);
+			param.a21 = param.a11 + 2*param.a12*param.s1;
+			param.a22 = (param.a10 + param.k1*(1-param.s1) - phi1)/(pow((1- param.s1),2));
+			
+			if (fx_d(100,param,fov) > 0)
+				high = x;
+			else
+				low = x;
+			if (fx_d(100, param,fov) == 0 || fabs(high - low) / fabs(low) < eps) {
+				UE_LOG(LogTemp, Log, TEXT("[%d]high = %f,low = %f"), k, high,	low);
+				break;
+			}
+		}
+	}else{
+		for (k = 1; k <= maxCount; k++) {
+			x = (low + high) / 2;
+			param.a11 = UKismetMathLibrary::DegreesToRadians(x);
+			param.h = param.a11/param.k0;
+			param.a12 = (param.phi1 - param.phi0 - 2 * param.a11 * pow((1 - param.s1),2) - param.k1 * param.h * pow((1 - param.s1),2) + (1 - param.s1) / 2) / 2 * pow((1 - param.s1),3) - 1;
+			param.a20 = param.a10 + param.a11*(1-param.s1)+param.a12*pow((1-param.s1),2);
+			param.a21 = param.a11 + 2 * param.a12*(1-param.s1);
+			param.a22 = (param.a10 + (param.k1*param.h) * (1 - param.s1) - phi1) / (pow((1 - param.s1), 2));
+
+			if (fx_d(100, param, fov) > 0)
+				high = x;
+			else
+				low = x;
+			if (fx_d(100, param, fov) == 0 || fabs(high - low) / fabs(low) < eps) {
+				UE_LOG(LogTemp, Log, TEXT("[%d]high = %f,low = %f"), k, high, low);
+				break;
+			}
+		}
+	}
+	
+	
+
+	_param = param;
+
+	// 収束しなかった場合
+	if (k > maxCount) {
+		UE_LOG(LogTemp, Error, TEXT("calcNonlinearEquation is Failed"));
+		return true;
+	}
+
+	//phiV = UKismetMathLibrary::DegreesToRadians(x);
+
+
+	return true;
+}
+
+bool AclothoidLine::calcNonlinearEquation_threeC(const float phi0, float& phiV, float& phiU, float r, float theta)
+{
+	//曲率
+	float k0 = UKismetMathLibrary::DegreesToRadians(10);
+
+	// Low, High 初期値設定
+	float low = -720;
+	float high = 720;
+	int maxCount = 50;
+	float eps = 0.0001;
+	int k = 0;
+	float x = 0;
+
+	FSlope f;
+	f.phi0 = phi0;
+
+	// 打ち切り回数 or 打ち切り誤差になるまで LOOP
+	for (k = 1; k <= maxCount; k++) {
+		x = (low + high) / 2;
+		f.phiV = UKismetMathLibrary::DegreesToRadians(x);
+
+		if (fx_sin(f) > 0)
+			high = x;
+		else
+			low = x;
+		if (fx_sin(f) == 0 || fabs(high - low) / fabs(low) < eps) {
+			UE_LOG(LogTemp, Log, TEXT("[%d]high = %f,low = %f"), k, high, low);
+			break;
+		}
+	}
+
+	phiV = UKismetMathLibrary::DegreesToRadians(x);
+	//phiU =  - phiV;
+
+	// 収束しなかった場合
+	if (k > maxCount) {
+		UE_LOG(LogTemp, Error, TEXT("calcNonlinearEquation is Failed"));
+		return false;
+	}
+
+	//phiV = UKismetMathLibrary::DegreesToRadians(x);
+
 
 	return true;
 }
@@ -1048,7 +1763,6 @@ TArray<FVector> AclothoidLine::calcClothoidCurve(float phi1, float phi0,float le
 	phiSlope.phiU = diff_phi - phiSlope.phiV;
 	//phiSlope.phiU = diff_phi - phiSlope.phiV;
 
-	
 	psiPoints.SetNum(num_CalcClothoid);
 	
     complex<double> psiP_Vector;
@@ -1478,7 +2192,7 @@ TArray<FVector> AclothoidLine::calcClothoidSpline(UPARAM(ref) TArray<FClothoidPa
 }
 
 //テスト用
-TArray<FVector> AclothoidLine::calcClothoidSpline2(UPARAM(ref)TArray<FClothoidPath>& pathDatas)
+TArray<FVector> AclothoidLine::calcDebugClothoidSpline(UPARAM(ref)TArray<FClothoidPath>& pathDatas)
 {
 	TArray<FVector>results;
 
@@ -1554,19 +2268,31 @@ TArray<FVector> AclothoidLine::calcClothoidSpline2(UPARAM(ref)TArray<FClothoidPa
 		//クロソイド曲線配列
 		TArray<FVector>curve;
 
+		const float _phi0Value = preRotation.Yaw;
+		const float _phi1Value = pathDatas[current].phi1;
+
+		const float _hValue = UKismetMathLibrary::Distance2D(targetLocXY, currentLocXY);
+
+		//距離が近すぎる場合、スキップ
+		if (_hValue < 1.0f) {
+			current++;
+			target++;
+			next++;
+			continue;
+		}
+
+
 		//次のパスがある場合
 		if (pathDatas.IsValidIndex(next)) {
 			//FVector2D nextLocXY = FVector2D(pathDatas[next].X, pathDatas[next].Y);
 			//FVector nextLoc = pathDatas[next];
 
-			const FRotator targetRot = UKismetMathLibrary::FindLookAtRotation(currentLoc, targetLoc);
-
 			//FRotator nextRot= UKismetMathLibrary::FindLookAtRotation(targetLoc,nextLoc);
 			//距離取得
-			const float _hValue = UKismetMathLibrary::Distance2D(targetLocXY, currentLocXY);
-
-			const float _phi0Value = preRotation.Yaw;
-			const float _phi1Value = angleOf2DVector(currentLocXY, targetLocXY);
+			
+			
+			//const float _phi1Value = angleOf2DVector(currentLocXY, targetLocXY);
+			
 
 			UE_LOG(Clothoid_Debug_LOG, Error, TEXT("[%d ~ %d] _phi0Value is %f , _phi1Value is %f"), current, target, _phi0Value, _phi1Value);
 
@@ -1581,37 +2307,31 @@ TArray<FVector> AclothoidLine::calcClothoidSpline2(UPARAM(ref)TArray<FClothoidPa
 
 			const float curveHeight = targetLoc.Z - currentLoc.Z;
 
-			const float stepS = 1.0f / _hValue;
-			for (int i = 0; i < _hValue; i++) {
+			const int num = _hValue * 1;
+
+			const float stepS = 1.0f / num;
+			for (int i = 0; i < num; i++) {
 				float S = stepS * i;
 				clothoidCurve[i].Z = curveHeight * S + currentLoc.Z;
 			}
 
 			curve.Append(clothoidCurve);
 
-			preControllP = true;
-			preRotation = targetRot;
-
 		}
 		else {//次のパスがない場合
 		//対象のパス座標に制御点に設定する
 
-			const FRotator targetRot = UKismetMathLibrary::FindLookAtRotation(currentLoc, targetLoc);
-
-			//距離取得
-			const float _hValue = UKismetMathLibrary::Distance2D(targetLocXY, currentLocXY);
-
 			const int num = _hValue * 1;
 
-			const float _phi0Value = preRotation.Yaw;
-
 			//phi1Valueをphi0Valueの角度に応じて直線で受け取れるようにする
-			const float _phi1Value = targetRot.Yaw;
+			//const float _phi1Value = targetRot.Yaw;
 
 			UE_LOG(Clothoid_Debug_LOG, Error, TEXT("[%d ~ %d] _phi0Value is %f , _phi1Value is %f"), current, target, _phi0Value, _phi1Value);
 
 			//視野角計算edr
-			const float _fov = deltaFloat(_phi1Value, _phi0Value);
+			float _fov = deltaFloat(_phi1Value, _phi0Value);
+			_fov = deltaFloat(UKismetMathLibrary::FindLookAtRotation(currentLoc, targetLoc).Yaw,_phi0Value);
+
 
 			TArray<FVector>clothoidCurve = calcClothoidCurve(_phi1Value, _phi0Value, _hValue, _fov, FVector(currentLocXY, 0), FVector(targetLocXY, 0));
 
@@ -1626,13 +2346,14 @@ TArray<FVector> AclothoidLine::calcClothoidSpline2(UPARAM(ref)TArray<FClothoidPa
 
 			//UE_LOG(Clothoid_Debug_LOG, Error, TEXT("[%d] clothoidCurve.Last() is %s"), current, *clothoidCurve.Last().ToString());
 
-			preControllP = true;
-
 			curve.Append(clothoidCurve);
 
-			preRotation = targetRot;
-
 		}
+
+		const FRotator targetRot = UKismetMathLibrary::FindLookAtRotation(currentLoc, targetLoc);
+
+		preRotation = targetRot;
+		preRotation.Yaw = _phi1Value;
 
 		results.Append(curve);
 
@@ -1761,4 +2482,3 @@ TArray<FVector> AclothoidLine::CalcClothoidSplineResultsSecond(UPARAM(ref) TArra
 	return results;
 }
 */
-
