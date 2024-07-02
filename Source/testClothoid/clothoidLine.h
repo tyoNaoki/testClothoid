@@ -1,5 +1,8 @@
 
 
+
+
+
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
@@ -68,6 +71,210 @@ struct FPhiSlope {
 	std::complex<double> operator()(float S) {
 		return slope_f(phiV, phiU, S);
 	}
+};
+
+USTRUCT(BlueprintType)
+struct FDouble_ClothoidParameter
+{
+	GENERATED_USTRUCT_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "parameter")
+		float s1 = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "parameter")
+		float k0 = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "parameter")
+		float k1 = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "parameter")
+		float phi1 = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "parameter")
+		float phi0 = 0;
+
+	UPROPERTY()
+		float h = 100;
+
+	UPROPERTY()
+		float a12 = 0;
+
+	UPROPERTY()
+		float a22 = 0;
+
+	UPROPERTY()
+		float a10 = 0;
+
+	UPROPERTY()
+		float a11 = 0;
+
+	UPROPERTY()
+		float a20 = 0;
+
+	UPROPERTY()
+		float a21 = 0;
+
+	FDouble_ClothoidParameter() = default;
+
+	//0<s1<s2<1
+
+	/*
+	FTriple_ClothoidParameter(float _s1, float _s2)
+		: s1(_s1), s2(_s2){
+	}
+	*/
+	//a10,a11,a12,a22,a32,h
+
+	std::complex<float> slope_f_phi_1(float S) {
+		std::complex<float> j(0.0f, 1.0f);
+		return std::exp(j * phi_1(S));
+	}
+
+	std::complex<float> slope_f_phi_1_sin(float S) {
+		return sinf(phi_1(S));
+	}
+
+	std::complex<float> slope_f_phi_2(float S) {
+		std::complex<float> j(0.0f, 1.0f);
+		return std::exp(j * phi_2(S));
+	}
+
+	std::complex<float> slope_f_phi_2_sin(float S) {
+		return sinf(phi_2(S));
+	}
+
+
+	float phi_1(float s) {
+		return a10 + a11 * s + a12 * pow(s, 2);
+	}
+
+	float phi_2(float s) {
+		return a20 + a21 * (s - s1) + a22 * pow(s - s1, 2);
+	}
+
+	void simpson_integral_phi1(float a, float b, std::complex<float>* r)
+	{
+		float mul = (b - a) * static_cast<float>(1.0 / 6.0);
+		*r = mul * (slope_f_phi_1(a) + static_cast<float>(4.0) * slope_f_phi_1((a + b) * static_cast<float>(0.5)) + slope_f_phi_1(b));
+	}
+
+	void simpson_integral_phi2(float a, float b, std::complex<float>* r)
+	{
+		float mul = (b - a) * static_cast<float>(1.0 / 6.0);
+		*r = mul * (slope_f_phi_2(a) + static_cast<float>(4.0) * slope_f_phi_2((a + b) * static_cast<float>(0.5)) + slope_f_phi_2(b));
+	}
+
+	void simpson_integral_phi1_sin(float a, float b, std::complex<float>* r)
+	{
+		float mul = (b - a) * static_cast<float>(1.0 / 6.0);
+		*r = mul * (slope_f_phi_1_sin(a) + static_cast<float>(4.0) * slope_f_phi_1_sin((a + b) * static_cast<float>(0.5)) + slope_f_phi_1_sin(b));
+	}
+
+	void simpson_integral_phi2_sin(float a, float b, std::complex<float>* r)
+	{
+		float mul = (b - a) * static_cast<float>(1.0 / 6.0);
+		*r = mul * (slope_f_phi_2_sin(a) + static_cast<float>(4.0) * slope_f_phi_2_sin((a + b) * static_cast<float>(0.5)) + slope_f_phi_2_sin(b));
+	}
+};
+
+USTRUCT(BlueprintType)
+struct FTriple_ClothoidParameter
+{
+	GENERATED_USTRUCT_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "parameter")
+		float s1 = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "parameter")
+		float s2 = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "parameter")
+		float startAngle = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "parameter")
+		float lastAngle = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "parameter")
+		float curveture0 = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "parameter")
+		float curveture1 = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "parameter")
+		float h = 100;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "parameter")
+		float a12 = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "parameter")
+		float a22 = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "parameter")
+		float a32 = 0;
+
+	UPROPERTY()
+		float a10 = 0;
+
+	UPROPERTY()
+		float a11 = 0;
+
+	UPROPERTY()
+		float a20 = 0;
+
+	UPROPERTY()
+		float a21 = 0;
+
+	UPROPERTY()
+		float a30 = 0;
+
+	UPROPERTY()
+		float a31 = 0;
+
+	FTriple_ClothoidParameter()= default;
+
+	//0<s1<s2<1
+	/*
+	FTriple_ClothoidParameter(float _s1,float _s2,float _a10,float _a11,float _a12,float _a22,float _a32)
+	: s1(_s1),s2(_s2),a10(_a10),a11(_a11),a12(_a12),a22(_a22),a30(_a32){
+		a20 = a10 + a11*s1 + a12 * pow(s1,2);
+		a21 = a11 + 2*a12*s1;
+	}
+	*/
+
+	/*
+	FTriple_ClothoidParameter(float _s1, float _s2)
+		: s1(_s1), s2(_s2){
+	}
+	*/
+	//a10,a11,a12,a22,a32,h
+
+	std::complex<float> slope_f_phi_1(float S) {
+		std::complex<float> j(0.0f, 1.0f);
+		return std::exp(j * phi_1(S));
+	}
+
+	std::complex<float> slope_f_phi_2(float S) {
+		std::complex<float> j(0.0f, 1.0f);
+		return std::exp(j * phi_2(S));
+	}
+
+	std::complex<float> slope_f_phi_3(float S) {
+		std::complex<float> j(0.0f, 1.0f);
+		return std::exp(j * phi_3(S));
+	}
+
+	float phi_1(float s){
+		return a10 + a11 * s + a12 * pow(s,2);
+	}
+
+	float phi_2(float s){
+		return a20 + a21 * (s - s1) + a22 * pow(s - s1,2);
+	}
+
+	float phi_3(float s) {
+		return a30 + a31 * (s - s2) + a32 * pow(s - s2, 2);
+	}
+
 };
 
 USTRUCT(BlueprintType)
@@ -240,6 +447,8 @@ public:
 
 	double fx(int n, float phi,double x, float fov);
 
+	double fx_d(int n,FDouble_ClothoidParameter &param, float fov);
+
 	//(ノット,旋回性能(バンク角の代わりに使用))
 	UFUNCTION(BlueprintCallable, Category = CalcClothoidSpline)
 		float calcTurnRadius(float turn_speed,float turnningPerformance,float scale);
@@ -267,7 +476,19 @@ public:
 
 	float getPhi_newtonMethod(float n,float _phi,float fov);
 
-	bool newtonMethod(const float localPhi1,const float localPhi0,float &phiV,float &phiU,float r);
+	bool newtonMethod(const float localPhi1,const float localPhi0,float &phiV,float &phiU,float r,float theta);
+
+	//二分法(単一クロソイド曲線用)
+	bool calcNonlinearEquation(const float localPhi1, const float localPhi0, float& phiV, float& phiU, float r, float theta);
+
+	//二分法(単一クロソイド曲線用(Ver2))
+	//bool calcNonlinearEquationVer2(const float phi0,const float phiV, float& phiU,const float fov);
+
+	//二分法(二連クロソイド曲線用)
+	bool calcNonlinearEquationVer2(FDouble_ClothoidParameter&_param, const float fov);
+
+	//二分法(３連クロソイド曲線用)
+	bool calcNonlinearEquation_threeC(const float phi0, float& phiV, float& phiU, float r, float theta);
 
 	//float falsePositionMethod(float n, float _phi, float fov);
 
@@ -302,7 +523,7 @@ public:
 		TArray<FVector>calcClothoidSpline(UPARAM(ref) TArray<FClothoidPath>& pathDatas);
 
 	UFUNCTION(BlueprintCallable, Category = CalcClothoidSpline)
-		TArray<FVector>calcClothoidSpline2(UPARAM(ref) TArray<FClothoidPath>& pathDatas);
+		TArray<FVector>calcDebugClothoidSpline(UPARAM(ref) TArray<FClothoidPath>& pathDatas);
 
 	UFUNCTION()
 		float combineFloat(float yaw1,float yaw2);
@@ -344,21 +565,47 @@ public:
 	FRotator getRotFromCircleTangent(FVector center,FVector circleTangent,int sign);
 
 	//↓testFunction///
-
 	UFUNCTION(BlueprintCallable)
-		TArray<FVector>tripleClothoidCurve(const float phi1,const float phi0,FVector start,FVector goal);
+		TArray<FVector>tripleClothoidCurve(FTriple_ClothoidParameter bp_Param,const float phi1,const float phi0,FVector start,FVector goal);
+
+	//曲率変化率(phiU)のみ独立させて計算
+	//初期角度(phi0)、初期曲率(phiV)は前回の制御点の数値参照
+	//二連クロソイド曲線
+	UFUNCTION(BlueprintCallable)
+		TArray<FVector>multipleClothoidCurve(FDouble_ClothoidParameter bp_Param, FVector start, FVector goal);
 
 	UFUNCTION()
 		bool calcClothoidParameter(const float phi1,const float phi0,const float theta,const float r,float &h,FSlope &slope);
+
+	UFUNCTION()
+		bool calcClothoidParameterVer2(FDouble_ClothoidParameter &param, const float fov,const float pointDistance);
+
+	UFUNCTION()
+		bool calcTripleCLothoidParameter(FTriple_ClothoidParameter& param,float fov,float startAngle, float lastAngle, float a12, float a22, float a32,float curveture0,float curveture1,float h,float s1,float s2);
+
+	UFUNCTION()
+		bool calcTripleClothoidCurvePoint(FTriple_ClothoidParameter &param);
 	
 	float simpson_integral_cos(FSlope f, float a, float b);
 
 	float simpson_integral_sin(FSlope f, float a, float b);
 
+	void simpson_integral_phi1(FTriple_ClothoidParameter &param,float a,float b, std::complex<float>* r);
+
+	void simpson_integral_phi2(FTriple_ClothoidParameter& param, float a, float b, std::complex<float>* r);
+
+	void simpson_integral_phi3(FTriple_ClothoidParameter& param, float a, float b, std::complex<float>* r);
+
 	UFUNCTION(BlueprintCallable)
 		void test_Function();
 
 		float angle_Vector(float value,float r);
+
+		const float fxVer2(const FPhiSlope f,const float fov);
+
+		const float fx_sin(FSlope &f);
+
+		const float fx_cos(const float phi0, const float phi, const float x);
 
 private:
 	bool clothoidInitialize = false;
