@@ -1,10 +1,4 @@
 
-
-
-
-
-
-
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "clothoidLine.h"
@@ -168,13 +162,7 @@ FRotator AclothoidLine::getRotFromCircleTangent(FVector center, FVector circleTa
 TArray<FVector> AclothoidLine::tripleClothoidCurve(FTriple_ClothoidParameter bp_Param,const float phi1, const float phi0, FVector start, FVector goal)
 {
 	TArray<FVector>clothoidCurve;
-	int n = 50;
-	float stepS = 0;
 	
-	float fov = UKismetMathLibrary::FindLookAtRotation(start,goal).Yaw;
-
-	float  h = 0;
-	float r = FVector::Dist2D(start, goal);
 	//FSlope slope;
 
 	/*
@@ -183,45 +171,56 @@ TArray<FVector> AclothoidLine::tripleClothoidCurve(FTriple_ClothoidParameter bp_
 		return clothoidCurve;
 	}
 	*/
-	if (bp_Param.h < 100.0f || 0 > bp_Param.s1 || bp_Param.s1 >=bp_Param.s2 ||bp_Param.s2 >=1 ) {
+
+	if (0 >= bp_Param.s1 || bp_Param.s1 >=bp_Param.s2 ||bp_Param.s2 >=1 ) {
 		//UE_LOG(LogTemp, Error, TEXT("calcClothoidParameter is failed!! [phi1 : %f,phi0 : %f,start : %s,goal : %s,h : %f]"), phi1, phi0, *start.ToString(), *goal.ToString(),h);
 
 		UE_LOG(LogTemp, Error, TEXT("h<=100.0f!! bp_Param.h = %f, s1 = %f, s2 = %f "),bp_Param.h,bp_Param.s1,bp_Param.s2);
 		return clothoidCurve;
 	}
 
-	h = 100;
-	
+	float r = FVector::Dist2D(start, goal);
+	float h = bp_Param.h; 
+	float fov = UKismetMathLibrary::FindLookAtRotation(start, goal).Yaw;
 	float s1 = bp_Param.s1;
 	float s2 = bp_Param.s2;
 	float a12 = bp_Param.a12;
 	float a22 = bp_Param.a22;
 	float a32 = bp_Param.a32;
-	float startAngle = bp_Param.startAngle;
-	float lastAngle = bp_Param.lastAngle;
-	float curveture0 = bp_Param.curveture0;
-	float curveture1 = bp_Param.curveture1;
+	float startAngle = bp_Param.phi0;
+	float lastAngle = bp_Param.phi1;
+	float curveture0 = bp_Param.k0;
+	float curveture1 = bp_Param.k1;
 
 	FTriple_ClothoidParameter param;
-	if(!calcTripleCLothoidParameter(param,fov,startAngle,lastAngle,a12,a22,a32,curveture0,curveture1,h,s1,s2)){
+
+	if(!calcTripleCLothoidParameter(param,r,fov,startAngle,lastAngle,a12,a22,a32,curveture0,curveture1,h,s1,s2)){
 		return clothoidCurve;
 	}
 
-	if(h<=0.0f){
+	if(param.h<=0.0f){
 		return clothoidCurve;
 	}
 
 	///////////tripleClothoidCurve///////////
-	int num = (int)param.h;
+	int num = 0;
+	if(param.h<=3.0f){
+		num = 100;
+	}else{
+		num = (int)param.h;
+	}
+
 	clothoidCurve.SetNum(num);
-	stepS = 1.0f/h;
+	float stepS = 1.0f/num;
+
 	int num0 = s1 * num;
 	int num1 = ((s2-s1)*num) + num0;
 
 	complex<float> curve;
 	int i = 0;
 
-	FVector lastpoint;
+	FVector startPoint;
+	FVector lastPoint;
 
 	for (i = 0; i < num0; ++i) {
 
@@ -234,10 +233,9 @@ TArray<FVector> AclothoidLine::tripleClothoidCurve(FTriple_ClothoidParameter bp_
 		float x = static_cast<float>(curve.real());
 		float y = static_cast<float>(curve.imag());
 
-		FVector2D clothoidCurve2D = (h * FVector2D(x, y));
+		FVector2D clothoidCurve2D = (param.h * FVector2D(x, y));
 		clothoidCurve[i] = start + FVector(clothoidCurve2D, 0);
 	}
-	lastpoint = clothoidCurve[num0-1];
 
 	for (i = num0; i < num1; ++i) {
 
@@ -250,11 +248,9 @@ TArray<FVector> AclothoidLine::tripleClothoidCurve(FTriple_ClothoidParameter bp_
 		float x = static_cast<float>(curve.real());
 		float y = static_cast<float>(curve.imag());
 
-		FVector2D clothoidCurve2D = (h * FVector2D(x, y));
+		FVector2D clothoidCurve2D = (param.h * FVector2D(x, y));
 		clothoidCurve[i] = start + FVector(clothoidCurve2D, 0);
 	}
-
-	lastpoint = clothoidCurve[num1-1];
 
 	for(i = num1;i< num;++i){
 
@@ -267,10 +263,23 @@ TArray<FVector> AclothoidLine::tripleClothoidCurve(FTriple_ClothoidParameter bp_
 		float x = static_cast<float>(curve.real());
 		float y = static_cast<float>(curve.imag());
 
-		FVector2D clothoidCurve2D = (h * FVector2D(x, y));
+		FVector2D clothoidCurve2D = (param.h * FVector2D(x, y));
 		clothoidCurve[i] = start + FVector(clothoidCurve2D, 0);
 	}
 
+	startPoint = clothoidCurve[0];
+	lastPoint = clothoidCurve[clothoidCurve.Num()-1];
+
+	//UE_LOG(LogTemp,Log,TEXT("h = %f"), r / f_cos_T(100, 0, param));
+
+	param.phi1 = UKismetMathLibrary::FindLookAtRotation(clothoidCurve[clothoidCurve.Num() - 2],clothoidCurve[clothoidCurve.Num()-1]).Yaw;
+
+	UE_LOG(LogTemp, Log, TEXT("result \n h = %f , phi1 = %f, phi0 = %f, fov = %f, k1 = %f, k0 = %f \n a10 = %f, a11 = %f, a12 = %f \n a20 = %f, a21 = %f, a22 = %f \n a30 = %f, a31 = %f, a32 = %f"), param.h,param.phi1, param.phi0,UKismetMathLibrary::DegreesToRadians(fov), param.calcK2(1.0f), param.calcK0(0.0f), param.a10, param.a11, param.a12, param.a20, param.a21, param.a22, param.a30, param.a31, param.a32);
+	
+	//UE_LOG(LogTemp, Log, TEXT("f_cos_T_once %f"),f_cos_T_once(param));
+
+	//1.331653
+	// 
 	////////////
 
 	/*
@@ -306,6 +315,8 @@ TArray<FVector> AclothoidLine::multipleClothoidCurve(FDouble_ClothoidParameter b
 	float pointDistance = FVector::Dist2D(start,goal);
 
 	auto param = bp_Param;
+	param.phi0 = UKismetMathLibrary::DegreesToRadians(param.phi0);
+	param.phi1 = UKismetMathLibrary::DegreesToRadians(param.phi1);
 
 	if(!calcClothoidParameterVer2(param,fov,pointDistance)){
 		return clothoidCurve;
@@ -348,6 +359,89 @@ TArray<FVector> AclothoidLine::multipleClothoidCurve(FDouble_ClothoidParameter b
 
 		FVector2D clothoidCurve2D = (param.h * FVector2D(x, y));
 		clothoidCurve[i] = start + FVector(clothoidCurve2D, 0);
+	}
+
+	return clothoidCurve;
+}
+
+TArray<FVector> AclothoidLine::multipleClothoidCurve2(FBP_Triple_ClothoidParameter bp_Param, FVector p0, FVector p1)
+{
+	//éOòAÉNÉçÉ\ÉCÉhã»ê¸
+	TArray<FVector>clothoidCurve;
+
+	float fov = UKismetMathLibrary::FindLookAtRotation(p0, p1).Yaw;
+	float pointDistance = FVector::Dist2D(p0, p1);
+
+	if (0 >= bp_Param.s1 || bp_Param.s1 >= bp_Param.s2 || bp_Param.s2 >= 1) {
+		UE_LOG(LogTemp, Error, TEXT("properties(S) is error num in bp_param"));
+		return clothoidCurve;
+	}
+
+	FTriple_ClothoidParameter param;
+	param = bp_Param;
+	param.h = 1.0f;
+	param.phi0 = UKismetMathLibrary::DegreesToRadians(param.phi0);
+	param.phi1 = UKismetMathLibrary::DegreesToRadians(param.phi1);
+
+	if (!calcClothoidParameterVer3(param, fov, pointDistance)) {
+		return clothoidCurve;
+	}
+
+	int n = (int)param.h;
+	clothoidCurve.SetNum(n);
+	float stepS = 1.0f / n;
+
+	//ó^Ç¶ÇÁÇÍÇΩéãñÏäpÇ∆àÍívÇ∑ÇÈÇ©åvéZ
+
+	int num1 = param.s1 * n;
+
+	complex<double> psiP_Vector;
+	int i = 0;
+	for (i = 0; i < num1; ++i) {
+		double S = stepS * i;
+
+		complex<float> r;
+		param.simpson_integral_phi1(S, S + stepS, &r);
+		psiP_Vector += r;
+
+		float x = static_cast<float>(psiP_Vector.real());
+		float y = static_cast<float>(psiP_Vector.imag());
+
+		FVector2D clothoidCurve2D = (param.h * FVector2D(x, y));
+		clothoidCurve[i] = (p0 + FVector(clothoidCurve2D,0));
+	}
+
+	int num2 = num1;
+	int num3 = param.s2 * n;
+
+	for (i = num2; i < num3; i++) {
+		double S = stepS * i;
+
+		complex<float> r;
+		param.simpson_integral_phi2(S, S + stepS, &r);
+		psiP_Vector += r;
+
+		float x = static_cast<float>(psiP_Vector.real());
+		float y = static_cast<float>(psiP_Vector.imag());
+
+		FVector2D clothoidCurve2D = (param.h * FVector2D(x, y));
+		clothoidCurve[i] = (p0 + FVector(clothoidCurve2D, 0));
+	}
+
+	num3 = num3;
+
+	for (i = num3; i < n; i++) {
+		double S = stepS * i;
+
+		complex<float> r;
+		param.simpson_integral_phi3(S, S + stepS, &r);
+		psiP_Vector += r;
+
+		float x = static_cast<float>(psiP_Vector.real());
+		float y = static_cast<float>(psiP_Vector.imag());
+
+		FVector2D clothoidCurve2D = (param.h * FVector2D(x, y));
+		clothoidCurve[i] = (p0 + FVector(clothoidCurve2D, 0));
 	}
 
 	return clothoidCurve;
@@ -477,14 +571,15 @@ bool AclothoidLine::calcClothoidParameterVer2(FDouble_ClothoidParameter& param, 
 		return false;
 	}
 
-	float stepS = 1.0f / 100;
+	int n = 200;
+
+	float stepS = 1.0f / n;
 	complex<double> psiP_Vector;
 
 	FVector2D lastPoint;
 	FVector2D startPoint;
-
 	
-	int num1 = param.s1*100;
+	int num1 = param.s1*n;
 	for (int i = 0; i < num1; ++i) {
 		double S = stepS * i;
 
@@ -500,7 +595,7 @@ bool AclothoidLine::calcClothoidParameterVer2(FDouble_ClothoidParameter& param, 
 		}
 	}
 
-	for (int i = num1; i < 100; ++i) {
+	for (int i = num1; i < n; ++i) {
 		double S = stepS * i;
 
 		complex<float> r;
@@ -510,7 +605,7 @@ bool AclothoidLine::calcClothoidParameterVer2(FDouble_ClothoidParameter& param, 
 		float l_x = static_cast<float>(psiP_Vector.real());
 		float l_y = static_cast<float>(psiP_Vector.imag());
 
-		if (i == (100 - 1)) {
+		if (i == (n - 1)) {
 			lastPoint = (1 * FVector2D(l_x, l_y));;
 		}
 	}
@@ -523,13 +618,8 @@ bool AclothoidLine::calcClothoidParameterVer2(FDouble_ClothoidParameter& param, 
 
 	
 	param.h = curveLength;
-	param.a10 = param.phi0;
-	param.a11 = param.k0 * param.h;
-	param.a20 = param.a10 + param.a11 * param.s1 + param.a12 * pow(param.s1, 2);
-	param.a21 = param.a11 + 2 * param.a12 * param.s1;
-	param.a22 = (param.a10 + (param.k1*param.h) * (1 - param.s1) - param.phi1) / (pow((1 - param.s1), 2));
-	
-
+	param.a10 += UKismetMathLibrary::DegreesToRadians(fov);
+	param.a20 += UKismetMathLibrary::DegreesToRadians(fov);
 	/*
 	param.h = curveLength;
 	param.a10 = param.phi0;
@@ -542,20 +632,188 @@ bool AclothoidLine::calcClothoidParameterVer2(FDouble_ClothoidParameter& param, 
 	return true;
 }
 
-bool AclothoidLine::calcTripleCLothoidParameter(FTriple_ClothoidParameter &param,float fov, float startAngle, float lastAngle, float a12,float a22,float a32,float curveture0, float curveture1, float h,float s1, float s2)
+bool AclothoidLine::calcClothoidParameterVer3(FTriple_ClothoidParameter& param, const float fov, const float pointDistance)
 {
+
+	if(!calcNonlinearEquationVer3(param, fov,pointDistance)) {
+		return false;
+	}
+
+	const int n = 200;
+	float stepS = 1.0f / n;
+	FVector2D lastPoint;
+	FVector2D startPoint;
+
+	//ó^Ç¶ÇÁÇÍÇΩéãñÏäpÇ∆àÍívÇ∑ÇÈÇ©åvéZ
+	//param.a10 = param.phi0 - UKismetMathLibrary::DegreesToRadians(fov);
+	//param.a20 = param.a20 + UKismetMathLibrary::DegreesToRadians(fov);
+	//param.a30 = param.a30 + UKismetMathLibrary::DegreesToRadians(fov);
+
+	//float oldA10 = param.a10;
+	
+	param.a10 += UKismetMathLibrary::DegreesToRadians(fov);
+	param.a20 += UKismetMathLibrary::DegreesToRadians(fov);
+	param.a30 += UKismetMathLibrary::DegreesToRadians(fov);
+	//UE_LOG(LogTemp, Verbose, TEXT("param.a10 = %f,param.a20 = %f,param.a30 = %f"),param.a10,param.a20,param.a30);
+
+	int num1 = param.s1 * n;
+
+	complex<double> psiP_Vector;
+	int i = 0;
+	for (i = 0; i < num1; ++i) {
+		double S = stepS * i;
+
+		complex<float> r;
+		param.simpson_integral_phi1(S, S + stepS, &r);
+		psiP_Vector += r;
+
+		//float x = static_cast<float>(psiP_Vector.real());
+		//float y = static_cast<float>(psiP_Vector.imag());
+		if (i == 0) {
+			float x = static_cast<float>(psiP_Vector.real());
+			float y = static_cast<float>(psiP_Vector.imag());
+			startPoint = (1 * FVector2D(x, y));
+		}
+	}
+
+	int num2 = num1;
+	int num3 = param.s2 * n;
+
+	for (i = num2; i < num3; i++) {
+		double S = stepS * i;
+
+		complex<float> r;
+		param.simpson_integral_phi2(S, S + stepS, &r);
+		psiP_Vector += r;
+
+	}
+
+	for (i = num3; i < n; i++) {
+		double S = stepS * i;
+
+		complex<float> r;
+		param.simpson_integral_phi3(S, S + stepS, &r);
+		psiP_Vector += r;
+
+		//float x = static_cast<float>(psiP_Vector.real());
+		//float y = static_cast<float>(psiP_Vector.imag());
+
+		if (i == n - 1) {
+			float x = static_cast<float>(psiP_Vector.real());
+			float y = static_cast<float>(psiP_Vector.imag());
+			lastPoint = (1 * FVector2D(x, y));
+		}
+	}
+
+	float curveLength = (pointDistance / UKismetMathLibrary::Distance2D(lastPoint, startPoint));
+
+	//UE_LOG(LogTemp,Log,TEXT("curveLength = %f"),curveLength);
+
+	if (curveLength <= 0) {
+		UE_LOG(LogTemp, Error, TEXT("curveLength = %f"), curveLength);
+		return false;
+	}
+
+	if(param.k0==0.0f&&param.k1==0.0f){
+		param.h = curveLength;
+	}
+	
+	if (param.k0==0.0f&&param.k1 != 0.0f) {
+		/*
+		param.a10 = param.phi0-UKismetMathLibrary::DegreesToRadians(fov);
+		param.h = curveLength;
+		param.a31=param.k1*param.h-2*param.a32*(1-param.s2);
+		param.a11 = 0;
+		param.a30 = (param.phi1 - UKismetMathLibrary::DegreesToRadians(fov)) - param.a31 * (1 - param.s2) - param.a32 * pow((1 - param.s2), 2);
+		param.a12 = (param.a10 - param.a30 + param.a31 / 2 * (param.s2 - param.s1)) / (-1 * pow(param.s1, 2) - 1 * param.s1 * (param.s2 - param.s1));
+		param.a20 = param.a10 + param.a12 * pow(param.s1, 2);
+		param.a21 = 2 * param.a12 * param.s1;
+		param.a22 = (param.a31 - 2 * param.a12 * param.s1) / (2 * (param.s2 - param.s1));
+		*/
+
+		//param.a10 += UKismetMathLibrary::DegreesToRadians(fov);
+		//param.a20 += UKismetMathLibrary::DegreesToRadians(fov);
+		//param.a30 += UKismetMathLibrary::DegreesToRadians(fov);
+
+		//UE_LOG(LogTemp, VeryVerbose, TEXT("a31(%f) + 2*a32(%f)*(1-s2(%f))-k1(%f)*h(%f) = %f"), param.a31, param.a32, param.s2, param.k1, param.h, param.a31 + 2 * param.a32 * (1 - param.s2) - param.k1 * param.h);
+
+		//UE_LOG(LogTemp,Verbose,TEXT("calcK0(%f) = %f,calcK1(%f) = %f,calcK2(%f) = %f"),0.0f,param.calcK0(0.0f),0.5f,param.calcK1(0.5f),1.0f,param.calcK2(1.0f));
+	}
+	
+	UE_LOG(LogTemp, Verbose, TEXT("curveParameter \n param.h = %f \n param.a10 = %f,param.a11 = %f,param.a12 = %f\n param.a20 = %f,param.a21 = %f,param.a22 = %f\n param.a30 = %f,param.a31 = %f,param.a32 = %f\n"), param.h, param.a10, param.a11, param.a12, param.a20, param.a21, param.a22, param.a30, param.a31, param.a32);
+
+	//param.a11 = param.k0 * param.h;
+	//param.a32 = p
+
+	return true;
+}
+
+bool AclothoidLine::calcTripleCLothoidParameter(FTriple_ClothoidParameter &param,float r,float fov, float startAngle, float lastAngle, float a12,float a22,float a32,float curveture0, float curveture1, float h,float s1, float s2)
+{
+	param.k0 = curveture0;
+	param.k1 = curveture1;
+	param.phi1 = UKismetMathLibrary::DegreesToRadians(lastAngle);
+	//param.phi1 = 0.87449;
+	param.phi0 = UKismetMathLibrary::DegreesToRadians(startAngle);
 	param.h = h;
 	param.s1 = s1;
 	param.s2 = s2;
-	param.a10 = UKismetMathLibrary::DegreesToRadians(startAngle);
-	param.a11 = UKismetMathLibrary::DegreesToRadians(curveture0)*h;
-	param.a12 = UKismetMathLibrary::DegreesToRadians(a12);
-	param.a20 = param.a10 + param.a11*s1 + param.a12*pow(s1,2);
-	param.a21 = param.a11+ 2 * a12 * s1;
-	param.a22 = UKismetMathLibrary::DegreesToRadians(a22);
-	param.a30 = param.a20 + param.a21*(s2 - s1) + param.a22 * pow((s2 - s1),2);
-	param.a31 = param.a21 + 2* param.a22 * (s2 -s1);
-	param.a32 = UKismetMathLibrary::DegreesToRadians(a32);
+	param.a10 = UKismetMathLibrary::DegreesToRadians(startAngle)-UKismetMathLibrary::DegreesToRadians(fov);
+	param.a11 = param.k0 * param.h;
+	param.a12 = a12;
+	param.a20 = param.a10 + param.a11*s1 + param.a12*pow(param.s1,2);
+	param.a21 = param.a11+ 2 * param.a12 * param.s1;
+	
+	bool custom = false;
+	if(!custom){
+		float p1 = param.phi1-UKismetMathLibrary::DegreesToRadians(fov);
+		param.a22 = a22;
+		param.a30 = param.a20 + param.a21 * (param.s2 - param.s1) + param.a22 * pow((param.s2 - param.s1), 2);
+		param.a31 = param.a21 + 2 * param.a22 * (param.s2 - param.s1);
+		param.a32 = ((param.phi1 - UKismetMathLibrary::DegreesToRadians(fov)) - param.a30 - param.a31 * (1 - param.s2)) / pow((1 - param.s2), 2);
+		
+		param.h = (param.a31+2*param.a32*(1-s2))/param.k1;
+		
+		/*
+		param.h = 1.0f;
+		float temp = (param.k1 * param.h) - (2 * (param.phi1-UKismetMathLibrary::DegreesToRadians(fov)) / (1 - param.s2) - 2 * param.a20 / (1 - param.s2) + param.a21 + (-2 * param.a21 * (param.s2 - param.s1) - 2 * param.a21 * (1 - param.s2)) / (1 - param.s2));
+		float temp2 = (2 * (param.s2 - param.s1) + (-4 * (param.s2 - param.s1)) + (-2 * pow((param.s2 - param.s1) ,2)) / (1 - param.s2));
+		param.a22 = temp / temp2;
+		param.a30 = param.a20 + param.a21 * (param.s2 - param.s1) + param.a22 * pow((param.s2 - param.s1),2);
+		param.a31 = param.a21 + 2 * param.a22 * (param.s2 - param.s1);
+		param.a32 = ((param.phi1-UKismetMathLibrary::DegreesToRadians(fov)) - param.a30 - param.a31 * (1 -	param.s2)) / pow((1 - param.s2),2);
+
+		//fx_T(200, param, 0);
+		UE_LOG(LogTemp, Log, TEXT("calc cos_T = %f"), f_cos_T(200, param));
+		UE_LOG(LogTemp,Log,TEXT("r = %f"),r);
+		
+		param.h = h;
+		temp = (param.k1 * param.h) - (2 * (param.phi1 - UKismetMathLibrary::DegreesToRadians(fov)) / (1 - param.s2) - 2 * param.a20 / (1 - param.s2) + param.a21 + (-2 * param.a21 * (param.s2 - param.s1) - 2 * param.a21 * (1 - param.s2)) / (1 - param.s2));
+		temp2 = (2 * (param.s2 - param.s1) + (-4 * (param.s2 - param.s1)) + (-2 * pow((param.s2 - param.s1), 2)) / (1 - param.s2));
+		param.a22 = temp / temp2;
+		param.a30 = param.a20 + param.a21 * (param.s2 - param.s1) + param.a22 * pow((param.s2 - param.s1), 2);
+		param.a31 = param.a21 + 2 * param.a22 * (param.s2 - param.s1);
+		param.a32 = ((param.phi1 - UKismetMathLibrary::DegreesToRadians(fov)) - param.a30 - param.a31 * (1 - param.s2)) / pow((1 - param.s2), 2);
+
+		UE_LOG(LogTemp, Log, TEXT("calc f_cos_T = %f"),f_cos_T(200,param));
+		*/
+
+	}else if(custom){
+		param.a22 = a22;
+		param.a30 = param.a20 + param.a21 * (param.s2 - param.s1) + param.a22 * pow((param.s2 - param.s1), 2);
+		param.a31 = param.a21 + 2 * param.a22 * (param.s2 - param.s1);
+		param.a32 = (param.k1 * param.h - param.a31) / (2 * (1 - param.s2));
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("calcParam \n h = %f ,fov = %f, k1 = %f, k0 = %f \n a10 = %f, a11 = %f, a12 = %f \n a20 = %f, a21 = %f, a22 = %f \n a30 = %f, a31 = %f, a32 = %f"), param.h,UKismetMathLibrary::DegreesToRadians(fov),curveture1, curveture0, param.a10, param.a11, param.a12, param.a20, param.a21, param.a22, param.a30, param.a31, param.a32);
+
+	UE_LOG(LogTemp, Log, TEXT("f_cos_T()-r %f,f_sin_T = %f"), param.h * f_cos_T(200, param) - r, f_sin_T(200, param));
+
+	//UE_LOG(LogTemp,Log,TEXT("calc h = %f"),r/f_cos_T(200,param));
+
+	param.a10 += UKismetMathLibrary::DegreesToRadians(fov);
+	param.a20 += UKismetMathLibrary::DegreesToRadians(fov);
+	param.a30 += UKismetMathLibrary::DegreesToRadians(fov);
 
 	return true;
 }
@@ -783,7 +1041,6 @@ double AclothoidLine::fx(int n, float phi, double x,float fov)
 	pSlope.phiU = phi - pSlope.phiV;
 
 	//ó^Ç¶ÇÁÇÍÇΩéãñÏäpÇ∆àÍívÇ∑ÇÈÇ©åvéZ
-
 	complex<double> psiP_Vector;
 	for (int i = 0; i < n; ++i) {
 		double S = stepS * i;
@@ -894,6 +1151,224 @@ double AclothoidLine::fx_d(int n, FDouble_ClothoidParameter& param, float fov)
 	//return angleOf2DVector(points[0],points[points.Num() - 1]) - fov;
 }
 
+double AclothoidLine::fx_T(int n, FTriple_ClothoidParameter& param, float fov)
+{
+	float stepS = 1.0f / n;
+	FVector2D lastPoint;
+	FVector2D startPoint;
+
+	//ó^Ç¶ÇÁÇÍÇΩéãñÏäpÇ∆àÍívÇ∑ÇÈÇ©åvéZ
+
+	int num1 = param.s1 * n;
+
+	complex<double> psiP_Vector;
+	int i = 0;
+	for (i = 0; i < num1; ++i) {
+		double S = stepS * i;
+
+		complex<float> r;
+		param.simpson_integral_phi1(S, S + stepS, &r);
+		psiP_Vector += r;
+
+		//float x = static_cast<float>(psiP_Vector.real());
+		//float y = static_cast<float>(psiP_Vector.imag());
+		if (i == 0) {
+			float x = static_cast<float>(psiP_Vector.real());
+			float y = static_cast<float>(psiP_Vector.imag());
+			startPoint = (1 * FVector2D(x, y));
+		}
+	}
+
+	int num2 = num1;
+	int num3 = param.s2*n;
+
+	for (i = num2; i <num3; i++) {
+		double S = stepS * i;
+
+		complex<float> r;
+		param.simpson_integral_phi2(S, S + stepS, &r);
+		psiP_Vector += r;
+
+		//float x = static_cast<float>(psiP_Vector.real());
+		//float y = static_cast<float>(psiP_Vector.imag());
+	}
+
+	for (i = num3; i < n; i++) {
+		double S = stepS * i;
+
+		complex<float> r;
+		param.simpson_integral_phi2(S, S + stepS, &r);
+		psiP_Vector += r;
+
+		//float x = static_cast<float>(psiP_Vector.real());
+		//float y = static_cast<float>(psiP_Vector.imag());
+
+		if (i == n - 1) {
+			float x = static_cast<float>(psiP_Vector.real());
+			float y = static_cast<float>(psiP_Vector.imag());
+			lastPoint = (1 * FVector2D(x, y));
+		}
+	}
+
+	UE_LOG(LogTemp,Log,TEXT("length = %f"),FVector2D::Distance(FVector2D(0,0),lastPoint));
+
+	// 2ì_ÇÃç¿ïWÇ©ÇÁÉâÉWÉAÉìÇãÅÇﬂÇÈ
+	double radian = atan2(lastPoint.Y - startPoint.Y, lastPoint.X - startPoint.X);
+
+	//degree = UKismetMathLibrary::RadiansToDegrees(radian)
+	double diff = angle_diff(radian, UKismetMathLibrary::DegreesToRadians(fov));
+
+	return UKismetMathLibrary::RadiansToDegrees(diff);
+}
+
+float AclothoidLine::f_sin_T(int n, FTriple_ClothoidParameter& param)
+{
+	float stepS = 1.0f / n;
+
+	//ó^Ç¶ÇÁÇÍÇΩéãñÏäpÇ∆àÍívÇ∑ÇÈÇ©åvéZ
+
+	int num1 = param.s1 * n;
+
+	float sinP = 0;;
+	int i = 0;
+
+	for (i = 0; i < num1; ++i) {
+		double S = stepS * i;
+
+		sinP += param.simpson_integral_sin1(S, S + stepS);
+	}
+
+	int num2 = num1;
+	int num3 = param.s2 * n;
+
+	for (i = num2; i < num3; i++) {
+		double S = stepS * i;
+
+		sinP += param.simpson_integral_sin2(S, S + stepS);
+	}
+
+	for (i = num3; i < n; i++) {
+		double S = stepS * i;
+
+		sinP += param.simpson_integral_sin3(S, S + stepS);
+	}
+
+	return sinP;
+}
+
+float AclothoidLine::f_cos_T(int n,FTriple_ClothoidParameter& param)
+{
+	float stepS = 1.0f / n;
+
+	//ó^Ç¶ÇÁÇÍÇΩéãñÏäpÇ∆àÍívÇ∑ÇÈÇ©åvéZ
+
+	int num1 = param.s1 * n;
+
+	float cosP = 0;;
+	int i = 0;
+
+	float cosResult1;
+	float cosResult2;
+	float cosResult3;
+
+	/*
+	for (i = 0; i < num1; ++i) {
+		double S = stepS * i;
+
+		//cosP += param.h * param.simpson_integral_cos1(S, S + stepS);
+		cosP += param.simpson_integral_cos1(S, S + stepS);
+	}
+
+	int num2 = num1;
+	int num3 = param.s2 * n;
+
+	for (i = num2; i < num3; i++) {
+		double S = stepS * i;
+
+		//cosP += param.h * param.simpson_integral_cos2(S, S + stepS);
+		cosP += param.simpson_integral_cos2(S, S + stepS);
+	}
+
+	for (i = num3; i < n; i++) {
+		double S = stepS * i;
+
+		//cosP += param.h * param.simpson_integral_cos3(S, S + stepS);
+		cosP += param.simpson_integral_cos3(S, S + stepS);
+	}
+	*/
+
+	for (i = 0; i < num1; ++i) {
+		double S = stepS * i;
+
+		//cosP += param.h * param.simpson_integral_cos1(S, S + stepS);
+		cosP += param.simpson_integral_cos1(S, S + stepS);
+	}
+
+	cosResult1 = cosP;
+
+	//UE_LOG(LogTemp,Log,TEXT("h=%f : cosP = %f"),param.h,cosP);
+	
+
+	int num2 = num1;
+	int num3 = param.s2 * n;
+
+	for (i = num2; i < num3; i++) {
+		double S = stepS * i;
+
+		//cosP += param.h * param.simpson_integral_cos2(S, S + stepS);
+		cosP += param.simpson_integral_cos2(S, S + stepS);
+	}
+
+	cosResult2 = cosP-cosResult1;
+
+	//UE_LOG(LogTemp, Log, TEXT("h=%f : cosP = %f"), param.h, cosP);
+
+	for (i = num3; i < n; i++) {
+		double S = stepS * i;
+
+		//cosP += param.h * param.simpson_integral_cos3(S, S + stepS);
+		cosP += param.simpson_integral_cos3(S, S + stepS);
+	}
+
+	cosResult3 = cosP - (cosResult2+cosResult1);
+
+	UE_LOG(LogTemp,Log,TEXT("h = %f, %f + %f + %f = %f"),param.h,cosResult1,cosResult2,cosResult3,cosP);
+
+	return cosP;
+}
+
+float AclothoidLine::f_cos_T_once(FTriple_ClothoidParameter& param)
+{
+	//float stepS = 1.0f / n;
+
+	//ó^Ç¶ÇÁÇÍÇΩéãñÏäpÇ∆àÍívÇ∑ÇÈÇ©åvéZ
+
+	float cosP = 0;
+	int i = 0;
+
+	for (i = 0; i < 1; ++i) {
+
+		//cosP += param.h * param.simpson_integral_cos1(S, S + stepS);
+		cosP += param.simpson_integral_cos1(0,param.s1);
+	}
+
+	int num2 = 1;
+	int num3 = 2;
+
+	for (i = num2; i < num3; i++) {
+
+		//cosP += param.h * param.simpson_integral_cos2(S, S + stepS);
+		cosP += param.simpson_integral_cos2(param.s1, param.s2);
+	}
+
+	for (i = num3; i < 3; i++) {
+
+		//cosP += param.h * param.simpson_integral_cos3(S, S + stepS);
+		cosP += param.simpson_integral_cos3(param.s2,1);
+	}
+
+	return cosP;
+}
 
 float AclothoidLine::calcTurnRadius(float turn_speed, float turnningPerformance,float scale)
 {
@@ -1075,6 +1550,68 @@ const float AclothoidLine::fx_cos(const float phi0,const float phi,const float x
 	}
 
 	return cosP;
+}
+
+TArray<int> AclothoidLine::randomChooseNodes()
+{
+	TMap<int,TArray<int>>nodes;
+	nodes.Add(0,{1,3});
+	nodes.Add(1,{0,2,6,7});
+	nodes.Add(2,{1,3,4,5});
+	nodes.Add(3,{0,2,4});
+	nodes.Add(4,{2,3,5});
+	nodes.Add(5,{2,4,8});
+	nodes.Add(6,{1,7,8});
+	nodes.Add(7,{1,6,8,9});
+	nodes.Add(8,{5,6,7,9,10});
+	nodes.Add(9,{7,8,10});
+	nodes.Add(10,{8,9});
+
+	TArray<int>randomNodes;
+	randomNodes.SetNum(nodes.Num());
+	TArray<int>chooseNodes;
+	bool finish = false;
+	int c = 0;
+	for(;c<=10;c++){
+		chooseNodes.Empty();
+		for (auto i : nodes) {
+			auto n = nodes[i.Key];
+			int length = n.Num();
+			int choose = rand() % length;
+			randomNodes[i.Key] = n[choose];
+		}
+
+		int count = 20;
+		int k = 0;
+		int start = 0;
+		int current = start;
+		int goal = 10;
+		chooseNodes.Add(start);
+		TArray<int>deadNodes;
+		deadNodes.Add(start);
+		while (k <= count) {
+			if (current == goal) {
+				finish = true;
+				break;
+			}
+			int next = randomNodes[current];
+			chooseNodes.Add(next);
+			if(deadNodes.Contains(next)){
+				break;
+			}
+			deadNodes.Add(next);
+			current = next;
+			k++;
+		}
+
+		if(finish == true){
+			break;
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("c = %i"), c);
+
+	return chooseNodes;
 }
 
 
@@ -1314,7 +1851,7 @@ bool AclothoidLine::calcNonlinearEquationVer2(FDouble_ClothoidParameter& _param,
 	
 	auto param = _param;
 	//param.a10 = param.phi0 - fov;
-	param.a10 = param.phi0;
+	param.a10 = param.phi0-UKismetMathLibrary::DegreesToRadians(fov);
 	//ÇàÇÇPÇ∆âºíËÇµÇƒåvéZ
 	param.a11 = param.k0 * 1.0f;
 
@@ -1333,25 +1870,26 @@ bool AclothoidLine::calcNonlinearEquationVer2(FDouble_ClothoidParameter& _param,
 
 
 	// ë≈ÇøêÿÇËâÒêî or ë≈ÇøêÿÇËåÎç∑Ç…Ç»ÇÈÇ‹Ç≈ LOOP
-	if(param.k0 == 0.0f){
+	if(param.k0 == 0.0f || param.k1 == 0.0f){
 		for (k = 1; k <= maxCount; k++) {
 			x = (low + high) / 2;
 			
 			param.a12 = UKismetMathLibrary::DegreesToRadians(x);
-			param.a20 = param.a10 + param.a11*param.s1 + param.a12*pow(param.s1,2);
-			param.a21 = param.a11 + 2*param.a12*param.s1;
-			param.a22 = (param.a10 + param.k1*(1-param.s1) - phi1)/(pow((1- param.s1),2));
+			param.a20 = param.a10 + param.a12*pow(param.s1,2);
+			param.a21 = 2*param.a12*param.s1;
+			param.a22 = ((phi1-UKismetMathLibrary::DegreesToRadians(fov))-param.a20-param.a21*(1-param.s1))/(pow((1- param.s1),2));
 			
-			if (fx_d(100,param,fov) > 0)
+			if (fx_d(200,param,0.0f) > 0)
 				high = x;
 			else
 				low = x;
-			if (fx_d(100, param,fov) == 0 || fabs(high - low) / fabs(low) < eps) {
+			if (fx_d(200, param,0.0f) == 0 || fabs(high - low) / fabs(low) < eps) {
 				UE_LOG(LogTemp, Log, TEXT("[%d]high = %f,low = %f"), k, high,	low);
 				break;
 			}
 		}
 	}else{
+		return false;
 		for (k = 1; k <= maxCount; k++) {
 			x = (low + high) / 2;
 			param.a11 = UKismetMathLibrary::DegreesToRadians(x);
@@ -1384,6 +1922,195 @@ bool AclothoidLine::calcNonlinearEquationVer2(FDouble_ClothoidParameter& _param,
 
 	//phiV = UKismetMathLibrary::DegreesToRadians(x);
 
+
+	return true;
+}
+
+bool AclothoidLine::calcNonlinearEquationVer3(FTriple_ClothoidParameter& _param, const float fov,float pointDistance)
+{
+	// Low, High èâä˙ílê›íË
+	float low = -2000;
+	float high = 2000;
+	//float low = -720.0f;
+	//float high = -40;
+
+	int n = 200;
+
+	int maxCount = 50;
+	//float eps = 0.01;
+	float eps = 0.0001;
+	float overEps = 0.00001;
+	int k = 0;
+	float x = 0;
+
+	auto param = _param;
+	//param.a10 = param.phi0 - fov;
+	
+	float r = pointDistance;
+
+	//const float phi1 = param.phi1-fov;
+
+	//float targetAngle = deltaFloat(fov, UKismetMathLibrary::RadiansToDegrees(phi0));
+
+	//a10 = èâä˙äpìxéwíË
+	//a11 = èâä˙ã»ó¶éwíË(k0)
+	//a12 = ìûíBÇ≈Ç´ÇÈílÇÉjÉÖÅ[ÉgÉìñ@Ç≈éwíË
+
+	//a20 = a10 + a11 * (1 - s1) + a12 * (1 - s1) ^ 2
+	//a21 = a11 + 2 * a12 * (1 - s1)
+	//a22 = (k1 - a21) / (2 - 2 * s1)
+
+	//ÇàÇÇPÇ∆âºíËÇµÇƒåvéZ
+	//param.h = 1.0f;
+
+	param.a10 = param.phi0 - UKismetMathLibrary::DegreesToRadians(fov);
+
+	// ë≈ÇøêÿÇËâÒêî or ë≈ÇøêÿÇËåÎç∑Ç…Ç»ÇÈÇ‹Ç≈ LOOP
+	for (k = 1; k <= maxCount; k++) {
+		x = (low + high) / 2;
+		
+
+		if(param.k0==0.0f&&param.k1==0.0f){
+			param.a32 = UKismetMathLibrary::DegreesToRadians(x);
+
+			param.a11 = 0;
+			param.a31= -2 * param.a32 * (1 - param.s2);
+			param.a30 = (param.phi1-UKismetMathLibrary::DegreesToRadians(fov)) - param.a31 * (1 - param.s2) - param.a32 * pow((1 - param.s2),2);
+
+			param.a12 = (param.a10 - param.a30 + param.a31 / 2 * (param.s2 - param.s1)) / (-1 * pow(param.s1,2) - 1 * param.s1 * (param.s2 - param.s1));
+			param.a20 = param.a10 + param.a12 * pow(param.s1,2);
+			param.a21 = 2 * param.a12 * param.s1;
+			param.a22 = (param.a31 - 2 * param.a12 * param.s1) / (2 * (param.s2 - param.s1));
+			
+		}else if(param.k0==0.0f&&param.k1!=0.0f){
+			param.a12 = UKismetMathLibrary::DegreesToRadians(x);
+
+			param.a10 = param.phi0 - UKismetMathLibrary::DegreesToRadians(fov);
+			//hÇ1Ç∆âºíËÇµÇƒåvéZ
+			param.a11 = 0.0f;
+			param.a20 = param.a10 + param.a11 * param.s1 + param.a12 * pow(param.s1, 2);
+			param.a21 = param.a11 + 2 * param.a12 * param.s1;
+
+			float temp = (param.k1 * 1.0f) - (2 * (param.phi1 - UKismetMathLibrary::DegreesToRadians(fov)) / (1 - param.s2) - 2 * param.a20 / (1 - param.s2) + param.a21 + (-2 * param.a21 * (param.s2 - param.s1) - 2 * param.a21 * (1 - param.s2)) / (1 - param.s2));
+			float temp2 = (2 * (param.s2 - param.s1) + (-4 * (param.s2 - param.s1)) + (-2 * pow((param.s2 - param.s1), 2)) / (1 - param.s2));
+			param.a22 = temp / temp2;
+
+			param.a30 = param.a20 + param.a21 * (param.s2 - param.s1) + param.a22 * pow((param.s2 - param.s1), 2);
+			param.a31 = param.a21 + 2 * param.a22 * (param.s2 - param.s1);
+			param.a32 = ((param.phi1 - UKismetMathLibrary::DegreesToRadians(fov)) - param.a30 - param.a31 * (1 - param.s2)) / pow((1 - param.s2), 2);
+
+			param.h = r/f_cos_T(n,param);
+
+			//hÇè„ãLéÆÇ©ÇÁì¸ÇÍÇƒàÍïîÉpÉâÉÅÅ[É^Å[ÇçƒåvéZ
+			temp = (param.k1 * param.h) - (2 * (param.phi1 - UKismetMathLibrary::DegreesToRadians(fov)) / (1 - param.s2) - 2 * param.a20 / (1 - param.s2) + param.a21 + (-2 * param.a21 * (param.s2 - param.s1) - 2 * param.a21 * (1 - param.s2)) / (1 - param.s2));
+			temp2 = (2 * (param.s2 - param.s1) + (-4 * (param.s2 - param.s1)) + (-2 * pow((param.s2 - param.s1), 2)) / (1 - param.s2));
+			param.a22 = temp / temp2;
+
+			param.a30 = param.a20 + param.a21 * (param.s2 - param.s1) + param.a22 * pow((param.s2 - param.s1), 2);
+			param.a31 = param.a21 + 2 * param.a22 * (param.s2 - param.s1);
+			param.a32 = ((param.phi1 - UKismetMathLibrary::DegreesToRadians(fov)) - param.a30 - param.a31 * (1 - param.s2)) / pow((1 - param.s2), 2);
+
+			/*
+			param.a12 = UKismetMathLibrary::DegreesToRadians(x);
+
+			param.a11 = param.k0 * param.h;
+			param.a20 = param.a10 + param.a11 * param.s1 + param.a12 * pow(param.s1,2);
+			param.a21 = param.a11 + 2 * param.a12 * param.s1;
+			float p = param.a10-(param.phi1 - UKismetMathLibrary::DegreesToRadians(fov));
+
+			float temp = (p - (param.a12 * pow(param.s1,2)) - (2 * param.a12 * param.s1) * (param.s2 - param.s1) - (2 * param.a12 * param.s1) * (1 - param.s2) - (param.a12 * (pow(param.s1,2) + 2 * param.s1 * (param.s2 - param.s1) + 2 * param.s1) - p) / (-1 * pow((1 - param.s2),2)) * pow((1 - param.s2),2));
+			float t = (pow((param.s2 - param.s1),2) + 2 * (param.s2 - param.s1) * (1 - param.s2));
+			float t2 = (pow((param.s2 - param.s1),2) + 2 * (param.s2 - param.s1)) / (-1 * pow((1 - param.s2),2)) * pow((1 - param.s2),2);
+			param.a22 = temp / (t + t2);
+			param.a30 = param.a20 + param.a21 * (param.s2 - param.s1) + param.a22 * pow((param.s2 - param.s1),2);
+			param.a31 = param.a21 + 2 * param.a22 * (param.s2 - param.s1);
+			param.a32 = (param.a12 * (pow(param.s1,2) + 2 * param.s1 * (param.s2 - param.s1) + 2 * param.s1) + param.a22 * (pow((param.s2 - param.s1),2) + 2 * (param.s2 - param.s1)) - p) / (-1 * pow((1 -param.s2),2));
+
+			param.h = ((2 * param.a12 * param.s1) + 2 * param.a22 * (param.s2 - param.s1) + 2 * param.a32 * (1 - param.s2)) / param.k1;
+
+			*/
+
+			//param.a31 = param.k1 * param.h - 2 * param.a32 * (1 - param.s2);
+			//param.a30 = (param.phi1-UKismetMathLibrary::DegreesToRadians(fov)) - param.a31 * (1 - param.s2) - param.a32 * pow((1 - param.s2),2);
+
+			//param.a12 = (param.a10 - param.a30 + param.a31 / 2 * (param.s2 - param.s1)) / (-1 * pow(param.s1,2) - 1 * param.s1 * (param.s2 - param.s1));
+			//param.a20 = param.a10 + param.a12 * pow(param.s1,2);
+			//param.a21 = 2 * param.a12 * param.s1;
+			//param.a22 = (param.a31 - 2 * param.a12 * param.s1) / (2 * (param.s2 - param.s1));
+			
+		}else{
+			return false;
+		}
+	
+		//param.a12 = UKismetMathLibrary::DegreesToRadians(x);
+		//param.a22  = ((-param.a21 - 2 * param.a32 * (1 - param.s2))/ (2 * (param.s2 - param.s1)))
+		/*
+		float temp = ((-param.a21 - 2 * param.a32 * (1 - param.s2)) / (2 * (param.s2 - param.s1))) - param.a22;
+		if (temp > 0)
+			high = x;
+		else
+			low = x;
+
+		if (!(temp == 0 || fabs(high - low) / fabs(low) < eps)) {
+			continue;
+		}
+		*/
+
+		if(param.k0 == 0.0f&&param.k1 == 0.0f){
+			if (f_sin_T(n, param)> 0)
+				high = x;
+			else
+				low = x;
+
+			if (f_sin_T(n, param)== 0 && param.h > 0.0 || fabs(f_sin_T(n, param)) < eps) {
+				UE_LOG(LogTemp, Log, TEXT("[%d]f_sin_T() = %f,high = %f,low = %f"), k, f_sin_T(n, param), high, low);
+				break;
+			}
+			else if (fabs(high - low) / fabs(low) < eps && param.h > 0) {
+				UE_LOG(LogTemp, Error, TEXT("[%d]over f_sin_T() = %f,high = %f,low = %f"), k, f_sin_T(n, param),high, low);
+				break;
+			}
+		}else if(param.k0==0.0f&&param.k1!=0.0f) {
+			if (f_sin_T(n, param)+param.h*f_cos_T(n,param)-r > 0)
+				high = x;
+			else
+				low = x;
+
+			if (f_sin_T(n, param)==0.0f && param.h*f_cos_T(n,param)-r == 0.0f|| fabs(f_sin_T(n, param)) < eps && fabs(param.h*f_cos_T(n,param)-r) < eps) {
+				UE_LOG(LogTemp, Log, TEXT("[%d]f_sin_T() = %f,high = %f,low = %f"), k, f_sin_T(n, param), high, low);
+				break;
+				
+			}
+			else if (fabs(high - low) / fabs(low) < overEps && param.h > 0) {
+				UE_LOG(LogTemp, Error, TEXT("[%d]over f_sin_T() = %f,over f_cos_T() = %f,high = %f,low = %f"), k, f_sin_T(n, param),param.h * f_cos_T(n,param) - r,high, low);
+				break;
+			}
+		}
+	}
+
+	_param = param;
+
+	// é˚ë©ÇµÇ»Ç©Ç¡ÇΩèÍçá
+	if (k > maxCount) {
+		
+		UE_LOG(LogTemp, Error,TEXT("high = %f,low = %f"),high,low);
+		UE_LOG(LogTemp, Error, TEXT("calcNonlinearEquation is Failed"));
+		return false;
+	}
+
+	//phiV = UKismetMathLibrary::DegreesToRadians(x);
+	//UE_LOG(LogTemp,Error,TEXT("success!!"));
+	UE_LOG(LogTemp, Verbose, TEXT("result \n param.h = %f,param.a10 = %f,param.a11 = %f,param.a12 = %f\n param.a20 = %f,param.a21 = %f,param.a22 = %f\n param.a30 = %f,param.a31 = %f,param.a32 = %f,fov = %f"),param.h,param.a10,param.a11,param.a12,param.a20,param.a21,param.a22,param.a30,param.a31,param.a32,UKismetMathLibrary::DegreesToRadians(fov));
+	
+	/*
+	UE_LOG(LogTemp,Log,TEXT("%f + %f*(1-%f)+%f(1-%f)^2 = %f \n phi1(%f) - fov(%f) = %f"),param.a30,param.a31,param.s2,param.a32,param.s2, param.a30 + param.a31 * (1 - param.s2) + param.a32 * pow((1-param.s2), 2),param.phi1,UKismetMathLibrary::DegreesToRadians(fov), param.phi1-UKismetMathLibrary::DegreesToRadians(fov));
+	*/
+	UE_LOG(LogTemp,VeryVerbose,TEXT("a31(%f) + 2*a32(%f)*(1-s2(%f))-k1(%f)*h(%f) = %f"),param.a31,param.a32,param.s2,param.k1,param.h,param.a31+2*param.a32*(1-param.s2)-param.k1*param.h);
+
+	UE_LOG(LogTemp, VeryVerbose, TEXT("a30(%f) + a31(%f)*(1-s2(%f))+a32(%f)(1-s2(%f))^2 - (phi1(%f)-fov(%f))= %f"), param.a30, param.a31, param.s2, param.a32, param.s2, param.phi1, UKismetMathLibrary::DegreesToRadians(fov), param.a30 + param.a31 * (1 - param.s2) + param.a32 * pow((1 - param.s2), 2) - (param.phi1 - UKismetMathLibrary::DegreesToRadians(fov)));
+
+	UE_LOG(LogTemp,Log,TEXT("calcK0(%f) = %f,calcK1(%f) = %f,calcK2(%f) = %f"),0.0,param.calcK0(0.0),0.5,param.calcK1(0.5),1.0,param.calcK2(1.0f));
+	//return false;
 
 	return true;
 }
